@@ -18,8 +18,8 @@ function ed(state, chave, padrao) {
 
 function capa(titulo1, titulo2, cliente, logo, meta) {
   return html`<div class="cover">
-    <div class="logos"><div class="brand">EL<b>O</b>GA<small>Consultoria &amp; Estratégias em Saúde</small></div>
-      ${logo ? html`<span class="x">×</span><img src="${logo}" alt="Logo ${cliente.name}">` : ''}</div>
+    <div class="logos"><div class="brand brand-img"><img src="assets/img/eloga-marca-clara.png" alt="ELOGA"><small>Consultoria &amp; Estratégias em Saúde</small></div>
+      ${logo ? html`<span class="x brand-img">×</span><img class="logo-cliente" src="${logo}" alt="Logo ${cliente.name}">` : ''}</div>
     <h1>${titulo1}<br><em>${titulo2}</em></h1>
     <div class="meta">${meta}</div></div><div class="bar"></div>`;
 }

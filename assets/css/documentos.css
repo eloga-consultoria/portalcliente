@@ -10,7 +10,8 @@
 .doc .cover{background:var(--d-navy);color:#fff;padding:52px;min-height:360px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;gap:28px}
 .doc .cover:after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;border:28px solid var(--d-purple);opacity:.55}
 .doc .cover .logos{display:flex;align-items:center;gap:18px;position:relative;z-index:1}
-.doc .cover .logos img{max-height:56px;max-width:160px;background:#fff;border-radius:8px;padding:6px}
+.doc .cover .logos .logo-cliente{max-height:56px;max-width:160px;background:#fff;border-radius:8px;padding:6px}
+.doc .brand-img img{display:block;height:34px;width:auto}
 .doc .cover .logos .x{color:var(--d-lilac);font-size:20px}
 .doc .brand{font-family:var(--serif);font-size:28px;letter-spacing:.5px;color:#fff;line-height:1.1}
 .doc .brand b{color:var(--d-lime);font-weight:400}
@@ -64,16 +65,35 @@
 /* ---------- impressão: o documento é copiado para #impressao e só ele sai no papel ---------- */
 #impressao{display:none}
 @media print{
-  @page{size:A4;margin:0}
+  /* Margens da folha: o cabeçalho (logo ELOGA) se repete em todas as páginas e o
+     rodapé com número da página fica na margem inferior. Texto corrido, sem páginas em branco. */
+  @page{size:A4;margin:10mm 0 14mm;
+    @bottom-left{content:"ELOGA · Consultoria & Estratégias em Saúde";font:8pt Manrope,Arial,sans-serif;color:#63717a;padding-left:16mm}
+    @bottom-right{content:"Página " counter(page) " de " counter(pages);font:8pt Manrope,Arial,sans-serif;color:#63717a;padding-right:16mm}}
   body.imprimindo{background:#fff}
   body.imprimindo #app,body.imprimindo #toasts,body.imprimindo .modal-back{display:none!important}
   body.imprimindo #impressao{display:block}
-  #impressao .doc{border:0;border-radius:0;max-width:none}
-  #impressao .doc .page{padding:16mm 16mm}
-  #impressao .doc .cover{min-height:auto;padding:22mm 16mm}
+  #impressao .impr-tab{width:100%;border-collapse:collapse}
+  #impressao .impr-tab>thead>tr>td,#impressao .impr-tab>tbody>tr>td{padding:0;border:0}
+  #impressao .impr-cab{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16mm 3mm;margin-bottom:5mm;border-bottom:1.5px solid #dfff00}
+  #impressao .impr-cab img{height:9mm;width:auto}
+  #impressao .impr-cab span{font:600 8pt Manrope,Arial,sans-serif;color:#63717a;text-align:right;letter-spacing:.02em}
+  #impressao .doc{border:0;border-radius:0;max-width:none;box-shadow:none}
+  #impressao .doc .page{padding:4mm 16mm 0}
+  #impressao .doc .cover{min-height:auto;padding:10mm 16mm;gap:14px;break-inside:avoid}
+  #impressao .doc .cover .brand-img{display:none}
+  #impressao .doc .cover h1{font-size:30px}
   #impressao .doc *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  #impressao .doc .foot{padding:8mm 16mm}
-  #impressao .pb{break-before:page}
-  #impressao .avoid{break-inside:avoid}
+  #impressao .doc .foot{display:none}
+  #impressao .pb{break-before:auto}
+  #impressao .avoid,#impressao .opt,#impressao tr,#impressao .callout{break-inside:avoid}
+  #impressao h2,#impressao h3,#impressao h4{break-after:avoid}
+  #impressao p,#impressao li{orphans:3;widows:3}
+  /* Opções de investimento sempre lado a lado, como no portal */
+  #impressao .doc .opts{grid-template-columns:1fr 1fr!important;gap:10px}
+  #impressao .doc .radar-wrap{grid-template-columns:300px 1fr!important}
+  #impressao .doc .kpis{grid-template-columns:repeat(3,1fr)!important}
+  #impressao .doc .opt{padding:14px}
+  #impressao .doc .opt .price{font-size:22px}
   #impressao .editable{outline:0!important}
 }

@@ -85,12 +85,28 @@ export function carregarScript(src) {
 export function imprimirDocumento(docEl, nomeArquivo) {
   let area = document.getElementById('impressao');
   if (!area) { area = document.createElement('div'); area.id = 'impressao'; document.body.appendChild(area); }
-  area.replaceChildren(docEl.cloneNode(true));
+  // Tabela de impressão: o <thead> (logo ELOGA + título) se repete no topo de cada página.
+  const titulo1 = [...(docEl.querySelector('.cover h1')?.childNodes || [])].map((n) => n.textContent).join(' ').replace(/\s+/g, ' ').trim();
+  const rodape = [...(docEl.querySelector('.foot')?.children || [])].map((x) => x.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean).join('  ·  ');
+  const tab = document.createElement('table'); tab.className = 'impr-tab';
+  const cab = document.createElement('div'); cab.className = 'impr-cab';
+  const logo = document.createElement('img'); logo.src = 'assets/img/eloga-marca-escura.png'; logo.alt = 'ELOGA';
+  const info = document.createElement('span'); info.textContent = ['Consultoria & Estratégias em Saúde', titulo1].filter(Boolean).join(' · ');
+  cab.append(logo, info);
+  const linha = (tag, filho) => { const sec = document.createElement(tag), tr = document.createElement('tr'), td = document.createElement('td'); td.append(filho); tr.append(td); sec.append(tr); return sec; };
+  tab.append(linha('thead', cab), linha('tbody', docEl.cloneNode(true)));
+  // Rodapé de cada página (texto do documento + número da página), na margem da folha
+  const estilo = document.createElement('style');
+  const css = (t) => '"' + t.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  if (rodape) estilo.textContent = `@media print{@page{@bottom-left{content:${css(rodape)}}}}`;
+  area.replaceChildren(estilo, tab);
   area.querySelectorAll('[contenteditable]').forEach((x) => x.removeAttribute('contenteditable'));
   const titulo = document.title;
   document.title = nomeArquivo; // vira o nome sugerido do PDF
   document.body.classList.add('imprimindo');
   const fim = () => { document.body.classList.remove('imprimindo'); document.title = titulo; area.replaceChildren(); removeEventListener('afterprint', fim); };
   addEventListener('afterprint', fim);
-  setTimeout(() => window.print(), 50);
+  // espera a logo carregar antes de abrir a impressão
+  const pronto = logo.complete ? Promise.resolve() : new Promise((ok) => { logo.onload = logo.onerror = ok; setTimeout(ok, 1500); });
+  pronto.then(() => setTimeout(() => window.print(), 50));
 }
