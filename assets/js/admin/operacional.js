@@ -368,7 +368,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       const doc = $('#doc-relatorio', el);
       imprimirDocumento(doc, 'ELOGA_Relatorio_Diagnostico_' + nomeArquivo(cliente.name));
       if (!registro) { sujo = true; await gravar(); }
-      registro = await q(db.from('operational_diagnoses').update({ report_issued_at: new Date().toISOString(), status: 'concluido' }).eq('id', registro.id).select().single());
+      registro = await q(db.from('operational_diagnoses').update({ report_issued_at: new Date().toISOString(), status: 'completed' }).eq('id', registro.id).select().single());
       await subirEtapa(cliente, 'relatorio_emitido');
       registrar('relatorio.pdf_gerado', { entidade: 'operational_diagnoses', id: registro.id, cliente: cliente.id });
     }

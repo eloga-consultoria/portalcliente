@@ -34,7 +34,7 @@ create table if not exists public.operational_diagnoses (
   id               uuid primary key default gen_random_uuid(),
   client_id        uuid not null references public.clients(id) on delete cascade,
   data             jsonb not null default '{}'::jsonb,
-  status           text  not null default 'rascunho' check (status in ('rascunho','concluido')),
+  status           text  not null default 'draft' check (status in ('draft','completed','archived')),
   report_issued_at timestamptz,
   created_by       uuid default auth.uid(),
   created_at       timestamptz not null default now(),

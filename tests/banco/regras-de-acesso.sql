@@ -4,15 +4,17 @@
 insert into auth.users(id,email) values ('00000000-0000-0000-0000-00000000000a','admin@t'),('00000000-0000-0000-0000-00000000000b','a@t'),('00000000-0000-0000-0000-00000000000c','b@t');
 insert into public.clients(id,name,slug,is_active,positioning_enabled,liberacoes) values
  ('10000000-0000-0000-0000-00000000000a','Clinica A','a',true,true,'{"plano":true}'),('10000000-0000-0000-0000-00000000000b','Clinica B','b',true,true,'{"plano":true}');
+-- o gatilho antigo (handle_new_user) já criou os perfis; aqui só ajustamos papel e clínica
 insert into public.profiles(user_id,role,client_id) values ('00000000-0000-0000-0000-00000000000a','admin',null),
- ('00000000-0000-0000-0000-00000000000b','client','10000000-0000-0000-0000-00000000000a'),('00000000-0000-0000-0000-00000000000c','client','10000000-0000-0000-0000-00000000000b');
+ ('00000000-0000-0000-0000-00000000000b','client','10000000-0000-0000-0000-00000000000a'),('00000000-0000-0000-0000-00000000000c','client','10000000-0000-0000-0000-00000000000b')
+on conflict (user_id) do update set role = excluded.role, client_id = excluded.client_id;
 insert into public.action_plan_views(client_id,dados) values ('10000000-0000-0000-0000-00000000000a','{"x":1}'),('10000000-0000-0000-0000-00000000000b','{"x":2}');
 insert into public.self_assessments(client_id,source) values ('10000000-0000-0000-0000-00000000000a','manual');
 
 \echo '--- ADMIN SEM MFA (aal1): deve ver 0 clientes'
 set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a","aal":"aal1"}';
 select count(*) as clientes from public.clients;
-\echo '--- ADMIN COM MFA (aal2): deve ver 2 clientes'
+\echo '--- ADMIN COM MFA (aal2): deve ver 3 clientes (2 de teste + 1 antiga)'
 set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a","aal":"aal2"}';
 select count(*) as clientes from public.clients;
 select count(*) as auditoria_visivel from public.audit_log;
@@ -25,6 +27,10 @@ select count(*) as clientes, max(name) from public.clients;
 select count(*) as planos from public.action_plan_views;
 select count(*) as autodiag from public.self_assessments;
 select count(*) as auditoria from public.audit_log;
+\echo '--- CLIENTE A: tabelas antigas fechadas (0, 0, 0)'
+select count(*) as modulos_antigos from public.client_modules;
+select count(*) as materiais_antigos from public.client_materials;
+select count(*) as planos_completos from public.action_plans;
 \echo '--- CLIENTE A tenta se promover a admin: deve dar 0 linhas / erro'
 update public.profiles set role='admin' where user_id='00000000-0000-0000-0000-00000000000b';
 \echo '--- CLIENTE A tenta liberar coisas para si: deve dar 0 linhas / erro'
@@ -46,5 +52,7 @@ select count(*) as docs from public.client_documents;
 reset role; set role anon; set request.jwt.claims = '{}';
 select count(*) from public.clients;
 reset role;
+\echo '--- plano antigo preservado em legacy_data (1 linha com items, data vazio)'
+select count(*) as legado from public.action_plans where legacy_data ? 'items' and data = '{}'::jsonb;
 \echo '--- auditoria registrada (como postgres)'
 select action, count(*) from public.audit_log group by 1 order by 1;

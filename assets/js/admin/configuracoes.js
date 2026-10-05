@@ -88,7 +88,7 @@ export async function render(el) {
       try {
         const novo = ler();
         if (Object.values(novo.formats).some((f) => !f.name)) return avisar('Todo programa precisa de nome.', 'bad');
-        await q(db.from('app_settings').upsert({ key: 'catalogo', value: novo }));
+        await q(db.from('app_settings').upsert({ key: 'catalogo', value: novo }, { onConflict: 'key' }));
         aplicarCatalogo(novo); cat = novo;
         registrar('configuracao.catalogo_salvo', { detalhes: { programas: Object.keys(novo.formats).length } });
         avisar('Catálogo salvo. As próximas propostas usarão estes valores.', 'ok');

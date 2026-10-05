@@ -12,7 +12,7 @@ trap '$BIN/pg_ctl -D "$DIR/data" stop -m fast >/dev/null 2>&1 || true; rm -rf "$
 "$BIN/pg_ctl" -D "$DIR/data" -o "-p $PORTA -k $DIR" -l "$DIR/log" start >/dev/null
 P="psql -h $DIR -p $PORTA -U postgres -q -v ON_ERROR_STOP=1"
 $P -c "create database teste"
-for f in tests/banco/supabase-imitacao.sql supabase/teste/base_minima_SOMENTE_PROJETO_TESTE.sql supabase/migrations/00[1-9]*.sql supabase/migrations/00[1-9]*.sql; do
+for f in tests/banco/supabase-imitacao.sql supabase/teste/replica_estrutura_oficial_SOMENTE_TESTE.sql tests/banco/dados-antigos.sql supabase/migrations/00[1-9]*.sql supabase/migrations/00[1-9]*.sql; do
   $P -d teste -f "$RAIZ/$f" >/dev/null 2>&1 || { echo "FALHOU: $f"; $P -d teste -f "$RAIZ/$f"; exit 1; }
 done
 echo "Migrations aplicadas (duas vezes, para provar que podem ser repetidas)."

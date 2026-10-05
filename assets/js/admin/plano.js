@@ -56,8 +56,8 @@ export async function render(p, ctx) {
     if (!dbPainel?.clients || !Object.keys(dbPainel.clients).length) return;
     flag('Salvando...');
     try {
-      await q(db.from('action_plans').upsert({ client_id: c.id, data: dbPainel }));
-      await q(db.from('action_plan_views').upsert({ client_id: c.id, dados: projecaoCliente(dbPainel) }));
+      await q(db.from('action_plans').upsert({ client_id: c.id, data: dbPainel }, { onConflict: 'client_id' }));
+      await q(db.from('action_plan_views').upsert({ client_id: c.id, dados: projecaoCliente(dbPainel) }, { onConflict: 'client_id' }));
       if (primeiro) { primeiro = false; registrar('plano.criado', { entidade: 'action_plans', id: c.id, cliente: c.id }); }
       flag('Salvo às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), 'ok');
     } catch (e) { flag('Não salvo', 'bad'); avisarErro(e); }

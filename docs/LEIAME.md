@@ -46,11 +46,12 @@ No projeto de **teste**, abra **SQL Editor > New query** e rode, um por vez, nes
 
 | Ordem | Arquivo | Para quê |
 |---|---|---|
-| 1 | `supabase/teste/base_minima_SOMENTE_PROJETO_TESTE.sql` | Cria as 3 tabelas que o projeto oficial já tem. **Só no teste.** |
+| 1 | `supabase/teste/replica_estrutura_oficial_SOMENTE_TESTE.sql` | Copia a estrutura do oficial (sem dados). **Só no teste.** |
 | 2 | `supabase/migrations/001_seguranca_base.sql` | Regras de acesso, 2FA obrigatória para admin, travas |
 | 3 | `supabase/migrations/002_diagnostico_proposta.sql` | Autodiagnóstico importado, diagnóstico operacional, propostas, LGPD |
 | 4 | `supabase/migrations/003_auditoria.sql` | Auditoria (5 anos, não apagável) |
 | 5 | `supabase/migrations/004_portal_cliente.sql` | Liberações, documentos, plano de ação, materiais, catálogo |
+| 6 | `supabase/migrations/005_compatibilidade_portal_antigo.sql` | Ajusta as tabelas do portal antigo sem perder dados e fecha as que não são mais usadas |
 
 ✅ Esperado: "Success. No rows returned" em todos.
 Se aparecer erro, **pare** e envie o print da mensagem (sem dados de clientes).
@@ -145,7 +146,7 @@ Supabase > **Edge Functions > Secrets > Add new secret**:
    Confira que o arquivo apareceu.
 2. Rode no oficial o `000_inspecao_somente_leitura.sql` (não altera nada) e me envie o resultado:
    eu confiro se a estrutura bate com o que as migrations esperam.
-3. Com o "ok" da conferência e **a sua autorização escrita**, rode **001 → 004** no oficial
+3. Com o "ok" da conferência e **a sua autorização escrita**, rode **001 → 005** no oficial
    (**não** rode o arquivo da pasta `supabase/teste`).
 4. Ajuste as configurações de login (Etapa 2) e os segredos (Etapa 4.2) no oficial.
 5. Troque o segredo `SUPABASE_PROJECT_REF` no GitHub pelo código oficial e rode **Publicar funções** de novo.
