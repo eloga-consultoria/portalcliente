@@ -1,0 +1,8 @@
+# Nunca versionar dados de clientes, backups ou segredos
+*.pdf
+backups/
+*.backup.json
+*.enc
+.env
+.env.*
+node_modules/
