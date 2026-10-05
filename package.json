@@ -1,0 +1,9 @@
+{
+  "name": "portal-eloga",
+  "private": true,
+  "type": "module",
+  "description": "Portal Estratégico ELOGA (site estático para GitHub Pages; não exige build)",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}
