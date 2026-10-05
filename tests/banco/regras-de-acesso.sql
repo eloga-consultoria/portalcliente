@@ -56,3 +56,31 @@ reset role;
 select count(*) as legado from public.action_plans where legacy_data ? 'items' and data = '{}'::jsonb;
 \echo '--- auditoria registrada (como postgres)'
 select action, count(*) from public.audit_log group by 1 order by 1;
+
+\echo '=== EDIÇÃO DO PLANO PELO CLIENTE (007) ==='
+reset role;
+insert into public.action_plans(client_id, data) values ('10000000-0000-0000-0000-00000000000a',
+  '{"clients":{"10000000-0000-0000-0000-00000000000a":{"nome":"Clinica A","plano":[],"swot":{"forcas":["interno"]}}}}')
+on conflict (client_id) do update set data = excluded.data;
+update public.clients set liberacoes='{"plano":true}', access_expires_at=null where name='Clinica A';
+set role authenticated;
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b","aal":"aal1"}';
+\echo '--- sem liberação de edição: deve dar erro'
+select public.cliente_salvar_plano('[{"id":"a1","what":"Ação","status":"Em andamento","progresso":20}]');
+reset role; update public.clients set liberacoes='{"plano":true,"plano_editar":true}' where name='Clinica A'; set role authenticated;
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b","aal":"aal1"}';
+\echo '--- com liberação: grava (sem erro)'
+select public.cliente_salvar_plano('[{"id":"a1","what":"Ação <script>x</script>","status":"Em andamento","progresso":20,"when":"2026-11-30"}]');
+\echo '--- id malicioso: deve dar erro'
+select public.cliente_salvar_plano('[{"id":"a1'');alert(1);(''","what":"x"}]');
+\echo '--- status inventado: deve dar erro'
+select public.cliente_salvar_plano('[{"id":"a1","status":"Hackeado"}]');
+\echo '--- cliente B tentando gravar: grava só no plano dele (não existe -> erro)'
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000c","aal":"aal1"}';
+select public.cliente_salvar_plano('[{"id":"b1","what":"x"}]');
+reset role;
+\echo '--- resultado: texto sem < >, SWOT preservada, auditoria registrada'
+select data->'clients'->'10000000-0000-0000-0000-00000000000a'->'plano'->0->>'what' as acao,
+       data->'clients'->'10000000-0000-0000-0000-00000000000a'->'swot' as swot_preservada
+  from public.action_plans where client_id='10000000-0000-0000-0000-00000000000a';
+select count(*) as auditoria_plano from public.audit_log where action='cliente.plano_editado';

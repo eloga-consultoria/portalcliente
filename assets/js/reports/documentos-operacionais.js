@@ -1,12 +1,13 @@
 // Relatório de Diagnóstico (integrado: autodiagnóstico + sessão de 45 min) e Proposta comercial.
 // Layout fiel ao modelo aprovado "ELOGA | Diagnóstico Operacional". Saída: HTML seguro para tela e impressão.
 import { html, confiavel } from '../core/dom.js';
-import { CATALOG, FRONT_KEYS, QC, num, avaliar, candidatas, situacaoDados, precoOpcao, semearOpcoes, somarDias, capacidade, DIAS, recorrente } from '../admin/operacional-modelo.js';
+import { COBRANCA_EXTRA, CATALOG, FRONT_KEYS, QC, num, avaliar, candidatas, situacaoDados, precoOpcao, semearOpcoes, somarDias, capacidade, DIAS, recorrente } from '../admin/operacional-modelo.js';
 import { LEVELS, READ, levelOf } from '../import/autodiagnostico-modelo.js';
 import { ROTULOS_CAMPOS } from '../import/leitores.js';
 
 const fmt = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—');
 const brl = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+const brl2 = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 });
 const hoje = () => new Date().toISOString().slice(0, 10);
 
 /** Trecho editável direto no documento (o texto alterado fica salvo no diagnóstico). */
@@ -179,6 +180,7 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
   const temPrograma = opts.some((o) => recorrente(CATALOG.formats[o.type]));
   const temSistema = opts.some((o) => o.system);
   const achados = state.matrix.findings.filter((f) => f.t.trim()).slice(0, 3);
+  const extras = (P.extras || []).filter((x) => String(x.desc || '').trim() && Number(x.valor) > 0);
   const E = editavel ? (k, d) => ed(state, k, d) : (k, d) => html`${state.report.edits[k] ?? d}`;
   let n = 0; const sec = () => ++n;
 
@@ -190,9 +192,6 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
     <p>${E('p_ctx', `A partir do autodiagnóstico e da sessão de diagnóstico realizada em ${fmt(state.client.sessionDate)}, ${ev.front ? CATALOG.fronts[ev.front].name.toLowerCase() : 'a frente prioritária'} foi identificada como a frente de maior impacto para ${cliente.name || 'a clínica'} neste momento.`)}</p>
     ${achados.length ? html`<p><b>Pontos que motivam esta proposta:</b></p><ul class="ck">${achados.map((f) => html`<li>${f.t}${f.i ? html` <span class="hint">(${f.i})</span>` : ''}</li>`)}</ul>` : ''}
     ${state.matrix.goal3m.trim() ? html`<div class="callout"><b>Objetivo para os próximos 3 meses:</b> “${state.matrix.goal3m}”</div>` : ''}
-
-    <h2 class="pb"><span class="num">${sec()}</span>Opções de investimento</h2>
-    ${opts.length ? html`<div class="opts">${P.options.map((o, i) => cartaoOpcao(o, i))}</div>` : html`<p class="empty">Monte as opções no painel acima.</p>`}
 
     ${frentes.length ? html`<h2 class="pb"><span class="num">${sec()}</span>Escopo de atuação</h2>
     ${frentes.map((k) => { const F = CATALOG.fronts[k]; return html`<div class="avoid" style="margin-bottom:14px"><h3>${F.name}</h3>
@@ -216,10 +215,19 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
       <tr><td><b>Duração mínima</b></td><td>Programas de acompanhamento: ${CATALOG.minMonths} meses.</td></tr>
       <tr><td><b>Fora do escopo</b></td><td>Frentes não contratadas; armazenamento de dados de pacientes${temSistema ? '; ' + CATALOG.system.outside.join('; ') : ''}.</td></tr>
       <tr><td><b>Validade</b></td><td><b>${P.validity} dias corridos — até ${fmt(validade)}.</b> Após essa data, valores e disponibilidade de agenda podem ser revistos.</td></tr>
+      ${(P.infoAdicional || '').trim() ? html`<tr><td><b>Informações adicionais</b></td><td style="white-space:pre-line">${P.infoAdicional.trim()}</td></tr>` : ''}
     </tbody></table>
 
     <h2><span class="num">${sec()}</span>Próximos passos</h2>
     <ul class="ck"><li>Escolha da opção e aceite desta proposta.</li><li>Assinatura do contrato.</li><li>Agendamento do encontro de início e envio dos dados para a linha de base.</li></ul>
+
+    <h2 class="pb"><span class="num">${sec()}</span>Investimento</h2>
+    ${opts.length ? html`<div class="opts">${P.options.map((o, i) => cartaoOpcao(o, i))}</div>` : html`<p class="empty">Monte as opções no painel acima.</p>`}
+    ${extras.length ? html`<h3 style="margin-top:18px">Custos adicionais</h3>
+      <table class="t avoid"><thead><tr><th>Descrição</th><th style="width:22%">Cobrança</th><th style="width:20%;text-align:right">Valor</th></tr></thead><tbody>
+        ${extras.map((x) => html`<tr><td>${x.desc}</td><td>${(COBRANCA_EXTRA.find(([v]) => v === x.cobranca) || COBRANCA_EXTRA[0])[1]}</td><td style="text-align:right"><b>${brl2(x.valor)}</b></td></tr>`)}
+      </tbody></table>
+      <p class="hint" style="margin-top:6px">Os custos adicionais somam-se ao valor da opção escolhida.</p>` : ''}
     <table class="t avoid" style="margin-top:22px"><thead><tr><th style="width:50%">Aceite da clínica</th><th>ELOGA</th></tr></thead><tbody>
       <tr><td style="height:70px">Opção escolhida: ____<br><br>Nome: ________________________ Data: __/__/____</td><td>Helle Machado<br>Consultoria &amp; Estratégias em Saúde</td></tr></tbody></table>
   </div>

@@ -15,7 +15,7 @@ body.no-portal .clientbar{display:none!important}
 /* Ponte com o Portal ELOGA. Este painel roda num quadro isolado (sandbox): não acessa
    a sessão do portal nem a internet. Os dados entram e saem só por mensagens. */
 (function(){
-  var papel = /^#cliente/.test(location.hash) ? 'cliente' : 'admin';
+  var papel = /^#cliente/.test(location.hash) ? (/[#&]editar\b/.test(location.hash) ? 'cliente-editor' : 'cliente') : 'admin';
   var pendente = null, pai = window.parent;
   window.addEventListener('message', function(e){
     if (e.source !== pai || !e.data || e.data.ponte !== 'eloga') return;
@@ -2410,7 +2410,7 @@ function generateReport(){
   const pilaresRows = PILARES.map(p => {
     const d = c.pilares[p.key];
     const cor = {'Crítico':'#e5484d','Atenção':'#a9660a','Bom':'#10a66a','Ótimo':'#6a00ff'}[d.status] || '#63717a';
-    return `<tr><td style="${td}">${p.label}</td><td style="${td};color:${cor};font-weight:800">${d.status}</td><td style="${td}">${d.nota===null?'—':d.nota.toFixed(1)+'/10'}</td><td style="${td}">${d.obs||'—'}</td></tr>`;
+    return `<tr><td style="${td}">${p.label}</td><td style="${td};color:${cor};font-weight:800">${d.status}</td><td style="${td}">${d.nota===null?'—':d.nota.toFixed(1)+'/10'}</td><td style="${td}">${E(d.obs||'—')}</td></tr>`;
   }).join('');
 
   const swotList = (quad, cor, titulo) => {
@@ -2424,7 +2424,7 @@ function generateReport(){
   const planoRows = planoOrdenado.length ? planoOrdenado.map(x => {
     const ds = displayStatusOf(x);
     const pl = (PILARES.find(p=>p.key===x.pilar)||{}).label || '';
-    return `<tr><td style="${td}">${pl}</td><td style="${td}"><b>${x.what||''}</b><br><span style="color:#63717a">${[x.why||'', x.meta?('Meta: '+x.meta):''].filter(Boolean).join(' · ')}</span></td><td style="${td}">${x.who||'—'}</td><td style="${td}">${fmt(x.when)}</td><td style="${td};color:${corStatus[ds]};font-weight:800">${ds}</td></tr>`;
+    return `<tr><td style="${td}">${pl}</td><td style="${td}"><b>${E(x.what||'')}</b><br><span style="color:#63717a">${E([x.why||'', x.meta?('Meta: '+x.meta):''].filter(Boolean).join(' · '))}</span></td><td style="${td}">${E(x.who||'—')}</td><td style="${td}">${fmt(x.when)}</td><td style="${td};color:${corStatus[ds]};font-weight:800">${ds}</td></tr>`;
   }).join('') : `<tr><td colspan="5" style="${td};text-align:center;color:#63717a">Nenhuma ação cadastrada.</td></tr>`;
 
   document.getElementById('relatorioImpressao').innerHTML = `
@@ -2557,7 +2557,8 @@ document.getElementById('nav').addEventListener('click', (e) => {
 
 async function iniciar(){
   RO = /[?&]modo=cliente\b/.test(location.search) || location.hash === '#cliente' || !!(window.ELOGA_PORTAL && window.ELOGA_PORTAL.papel === 'cliente');
-  document.body.classList.toggle('client-mode', RO);
+  RO = RO && !(window.ELOGA_PORTAL && window.ELOGA_PORTAL.papel === 'cliente-editor');
+  document.body.classList.toggle('client-mode', RO || !!(window.ELOGA_PORTAL && window.ELOGA_PORTAL.papel === 'cliente-editor'));
   try{ SOM_ON = localStorage.getItem('eloga_som') !== '0'; }catch(e){}
   let pre = null;
   if(window.ELOGA_PORTAL && typeof window.ELOGA_PORTAL.carregar === 'function'){

@@ -37,11 +37,13 @@ export async function render(p, ctx) {
 
   montar(p, html`<div class="stack">
     ${!temLogin ? html`<div class="notice warn">Este cliente ainda não tem acesso ao portal. Crie o acesso na <a href="#/cliente/${c.id}/visao">Visão geral</a> para que ele veja o que for liberado.</div>` : ''}
-    <div class="card"><div class="card-head"><div><h2>O que o cliente vê</h2><p>Nada aparece para o cliente sem a sua liberação. Tudo é somente leitura.</p></div></div>
+    <div class="card"><div class="card-head"><div><h2>O que o cliente vê</h2><p>Nada aparece para o cliente sem a sua liberação. Tudo é somente leitura, exceto o plano de ação quando você permitir a edição.</p></div></div>
       <div class="table-wrap"><table class="t"><thead><tr><th>Item</th><th>Opções</th><th></th></tr></thead><tbody>
         <tr><td><b>Diagnóstico de posicionamento</b><div class="xs muted">Ficha para o cliente preencher. Ele não vê o relatório.</div></td><td></td>
           <td><label class="check"><input type="checkbox" data-pos ${c.positioning_enabled ? html`checked` : ''}> Liberado</label></td></tr>
-        <tr><td><b>Plano de ação (PDCA)</b><div class="xs muted">Demandas, responsáveis, prazos e situação. Sem diagnóstico, SWOT ou relatórios mensais.</div></td><td></td>
+        <tr><td><b>Plano de ação (PDCA)</b><div class="xs muted">Demandas, responsáveis, prazos e situação. Sem diagnóstico, SWOT ou relatórios mensais.</div></td>
+          <td><label class="check"><input type="checkbox" data-lib="plano_editar" ${lib.plano_editar ? html`checked` : ''} ${lib.plano ? '' : html`disabled`}> Cliente pode editar as ações</label>
+            <div class="xs muted">Responsáveis, prazos, status, progresso e evidências. Fica registrado na auditoria.</div></td>
           <td><label class="check"><input type="checkbox" data-lib="plano" ${lib.plano ? html`checked` : ''}> Liberado</label></td></tr>
         <tr><td><b>Dashboard do plano</b><div class="xs muted">Indicadores de andamento das ações.</div></td><td></td>
           <td><label class="check"><input type="checkbox" data-lib="dashboard" ${lib.dashboard ? html`checked` : ''}> Liberado</label></td></tr>
@@ -92,7 +94,13 @@ export async function render(p, ctx) {
         await q(db.from('clients').update({ positioning_enabled: t.checked, ...(t.checked ? { positioning_released_at: new Date().toISOString() } : {}) }).eq('id', c.id));
         c.positioning_enabled = t.checked; avisar(t.checked ? 'Posicionamento liberado.' : 'Liberação retirada.', 'ok');
       }
+      if (t.dataset.lib === 'plano') {
+        const ed = $('[data-lib="plano_editar"]', p);
+        if (!t.checked && lib.plano_editar) { lib.plano_editar = false; ed.checked = false; }
+        ed.disabled = !t.checked;
+      }
       if (t.dataset.lib) await salvarLib(t.dataset.lib, t.checked);
+      if (t.dataset.lib === 'plano_editar') registrar('plano.edicao_cliente', { entidade: 'clients', id: c.id, cliente: c.id, detalhes: { permitida: t.checked } });
       if (t.dataset.baixar) {
         await q(db.from('client_documents').update({ pode_baixar: t.checked }).eq('client_id', c.id).eq('tipo', t.dataset.baixar));
         avisar(t.checked ? 'O cliente pode baixar o PDF.' : 'Somente visualização.', 'ok');

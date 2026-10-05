@@ -21,18 +21,18 @@ export function projecaoCliente(dbPainel) {
 }
 
 /** Monta o painel num iframe isolado. modo: 'admin' | 'cliente' (+ 'so=plano|dashboard'). */
-export function montarPainel(caixa, { dados, modo = 'admin', so = '', ir = '', aoSalvar }) {
+export function montarPainel(caixa, { dados, modo = 'admin', so = '', ir = '', editar = false, aoSalvar }) {
   const iframe = document.createElement('iframe');
   iframe.title = 'Plano de ação ELOGA';
   iframe.className = 'painel-frame';
   iframe.setAttribute('sandbox', modo === 'admin'
     ? 'allow-scripts allow-modals allow-downloads allow-popups allow-top-navigation-to-custom-protocols'
-    : 'allow-scripts');
-  iframe.src = 'assets/painel/painel-mestre.html' + (modo === 'cliente' ? '#cliente' + (so ? '&so=' + so : '') + (ir ? '&ir=' + ir : '') : '');
+    : editar ? 'allow-scripts allow-modals' : 'allow-scripts');
+  iframe.src = 'assets/painel/painel-mestre.html' + (modo === 'cliente' ? '#cliente' + (so ? '&so=' + so : '') + (ir ? '&ir=' + ir : '') + (editar ? '&editar' : '') : '');
   const ouvir = (e) => {
     if (e.source !== iframe.contentWindow || !e.data || e.data.ponte !== 'eloga') return;
     if (e.data.tipo === 'pronto') iframe.contentWindow.postMessage({ ponte: 'eloga', tipo: 'dados', db: dados }, '*');
-    if (e.data.tipo === 'salvar' && modo === 'admin' && e.data.db && typeof e.data.db === 'object') aoSalvar?.(e.data.db);
+    if (e.data.tipo === 'salvar' && (modo === 'admin' || editar) && e.data.db && typeof e.data.db === 'object') aoSalvar?.(e.data.db);
     if (e.data.tipo === 'altura' && Number.isFinite(e.data.h)) iframe.style.height = Math.max(640, Math.min(e.data.h + 20, 20000)) + 'px';
   };
   addEventListener('message', ouvir);

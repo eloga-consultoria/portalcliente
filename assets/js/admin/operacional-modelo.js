@@ -104,8 +104,12 @@ export const estadoPadrao = () => ({
   matrix: { scores: {}, ovFront: '', ovFormat: '', findings: [{ t: '', i: '' }, { t: '', i: '' }, { t: '', i: '' }], quickwins: ['', '', ''], goal3m: '', exec: '' },
   report: { edits: {} },
   proposal: { date: hoje(), validity: 15, code: '', onsite: 0, payment: 'Mensal, via PIX ou boleto, com vencimento no dia 10',
-    options: [{ type: '', fronts: [], months: 3, system: false, recommended: true, prices: {} }, { type: '', fronts: [], months: 3, system: false, recommended: false, prices: {} }] },
+    options: [{ type: '', fronts: [], months: 3, system: false, recommended: true, prices: {} }, { type: '', fronts: [], months: 3, system: false, recommended: false, prices: {} }],
+    extras: [], infoAdicional: '' },
 });
+
+/** Custos adicionais da proposta: descrição, forma de cobrança e valor. */
+export const COBRANCA_EXTRA = [['unico', 'Valor único'], ['mensal', 'Por mês'], ['encontro', 'Por encontro'], ['hora', 'Por hora']];
 
 export function mesclar(base, src) {
   for (const k in src) {

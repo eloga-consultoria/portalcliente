@@ -102,14 +102,14 @@ async function visao(p, ctx) {
       ${temLogin ? html`<dl class="kv"><dt>E-mail de login</dt><dd>${c.access_email || '—'}</dd>
           <dt>Válido até</dt><dd>${c.access_expires_at ? fmtData(c.access_expires_at) : 'Sem prazo'}</dd>
           <dt>Senha</dt><dd>${ctx.perfis.some((x) => x.must_change_password) ? 'Temporária (ainda não trocada)' : 'Definida pelo cliente'}</dd></dl>
-        <div class="row" style="margin-top:14px;align-items:flex-end"><div class="field" style="flex:1"><label for="validade">Nova validade</label><input id="validade" type="date" value="${c.access_expires_at ? String(c.access_expires_at).slice(0, 10) : ''}"></div>
-          <button class="btn secondary" type="button" data-acao="validade">Salvar validade</button></div>
+        <div class="stack" style="margin-top:14px">${seletorPeriodo('val', c.access_expires_at ? 'data' : 'sem', c.access_expires_at ? String(c.access_expires_at).slice(0, 10) : '', 'Alterar período de acesso')}
+          <div><button class="btn secondary" type="button" data-acao="validade">Salvar período</button></div></div>
         <div class="toolbar" style="margin-top:14px">
           <button class="btn secondary" type="button" data-acao="senha">Gerar nova senha</button>
           <button class="btn secondary" type="button" data-acao="email">Alterar e-mail</button>
           <button class="btn ${c.is_active ? 'danger' : 'secondary'}" type="button" data-acao="bloquear">${c.is_active ? 'Bloquear acesso' : 'Desbloquear acesso'}</button></div>`
       : html`<form id="f-acesso" class="stack"><div class="field"><label for="ac-email">E-mail de login</label><input id="ac-email" type="email" value="${c.contact_email || ''}" required></div>
-          <div class="field"><label for="ac-dias">Validade do acesso</label><select id="ac-dias"><option value="7">7 dias</option><option value="15" selected>15 dias</option><option value="30">30 dias</option><option value="60">60 dias</option><option value="">Sem prazo</option></select></div>
+          ${seletorPeriodo('ac', '15')}
           <button class="btn strong" type="submit">Criar acesso e gerar senha</button>
           <p class="xs muted" style="margin:0">A senha temporária aparece uma única vez. O cliente troca no primeiro acesso.</p></form>`}</div>
 
@@ -143,11 +143,12 @@ async function visao(p, ctx) {
     });
   }, o);
 
+  ligarPeriodos(p, o.signal);
   $('#f-acesso', p)?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = $('#ac-email', p).value.trim(), dias = $('#ac-dias', p).value;
-    let expira = null;
-    if (dias) { const d = new Date(); d.setDate(d.getDate() + +dias); d.setHours(23, 59, 59); expira = d.toISOString(); }
+    const email = $('#ac-email', p).value.trim();
+    let expira;
+    try { expira = lerPeriodo(p, 'ac'); } catch (err) { avisar(err.message, 'bad'); return; }
     await ocupado(e.submitter, async () => {
       try {
         const r = await funcao('admin-clientes', { acao: 'criar_acesso', client_id: c.id, email, access_expires_at: expira });
@@ -193,6 +194,41 @@ async function recarregar(p, ctx) {
   await visao(novo, ctx);
 }
 
+// Período de acesso: atalhos em dias, uma data específica ou sem prazo.
+const PERIODOS = [['7', '7 dias'], ['15', '15 dias'], ['30', '30 dias'], ['60', '60 dias'], ['90', '90 dias'], ['180', '6 meses'], ['365', '1 ano'],
+  ['data', 'Até uma data específica'], ['sem', 'Sem prazo']];
+function seletorPeriodo(id, padrao, dataAtual = '', rotulo = 'Período de acesso') {
+  const hoje = new Date().toISOString().slice(0, 10);
+  return html`<div class="grid g2" data-periodo="${id}" style="gap:var(--s3)">
+    <div class="field"><label for="${id}-modo">${rotulo}</label><select id="${id}-modo">${PERIODOS.map(([v, t]) => html`<option value="${v}" ${v === padrao ? html`selected` : ''}>${t}</option>`)}</select></div>
+    <div class="field" id="${id}-caixa-data" ${padrao === 'data' ? '' : html`hidden`}><label for="${id}-data">Acesso até</label><input id="${id}-data" type="date" min="${hoje}" value="${dataAtual}"></div>
+    <p class="xs muted" id="${id}-resumo" style="grid-column:1/-1;margin:0">${resumoPeriodo(padrao, dataAtual)}</p></div>`;
+}
+function fimDoPeriodo(modo, data) {
+  if (modo === 'sem') return null;
+  if (modo === 'data') return data ? new Date(data + 'T23:59:59') : undefined;
+  const d = new Date(); d.setDate(d.getDate() + +modo); d.setHours(23, 59, 59, 0); return d;
+}
+function resumoPeriodo(modo, data) {
+  const fim = fimDoPeriodo(modo, data);
+  return fim === null ? 'O acesso fica liberado até ser bloqueado manualmente.' : fim ? 'O cliente poderá entrar até ' + fmtData(fim.toISOString()) + '.' : 'Escolha a data final.';
+}
+function lerPeriodo(raiz, id) {
+  const modo = $(`#${id}-modo`, raiz).value, data = $(`#${id}-data`, raiz).value;
+  const fim = fimDoPeriodo(modo, data);
+  if (fim === undefined) throw new Error('Escolha a data final do acesso.');
+  if (fim && fim < new Date()) throw new Error('A data final precisa ser hoje ou depois.');
+  return fim ? fim.toISOString() : null;
+}
+function ligarPeriodos(raiz, signal) {
+  raiz.addEventListener('change', (e) => {
+    const caixa = e.target.closest('[data-periodo]'); if (!caixa) return;
+    const id = caixa.dataset.periodo, modo = $(`#${id}-modo`, caixa).value;
+    $(`#${id}-caixa-data`, caixa).hidden = modo !== 'data';
+    $(`#${id}-resumo`, caixa).textContent = resumoPeriodo(modo, $(`#${id}-data`, caixa).value);
+  }, { signal });
+}
+
 async function mostrarSenha(c, email, senha, expira) {
   const msg = `Olá! Seu acesso ao Portal ELOGA está pronto.\n\nEndereço: ${location.origin + location.pathname}\nE-mail: ${email}\nSenha temporária: ${senha}\n${expira ? 'Disponível até: ' + fmtData(expira) + '\n' : ''}\nNo primeiro acesso você vai criar uma senha só sua.\n\nHelle Machado · ELOGA`;
   await janela({
@@ -207,9 +243,11 @@ async function mostrarSenha(c, email, senha, expira) {
 
 const ACOES_VISAO = {
   async validade(p, ctx) {
-    const v = $('#validade', p).value;
-    await q(db.from('clients').update({ access_expires_at: v ? new Date(v + 'T23:59:59').toISOString() : null }).eq('id', ctx.cliente.id));
-    avisar('Validade atualizada.', 'ok'); await recarregar(p, ctx);
+    let expira;
+    try { expira = lerPeriodo(p, 'val'); } catch (err) { avisar(err.message, 'bad'); return; }
+    await q(db.from('clients').update({ access_expires_at: expira }).eq('id', ctx.cliente.id));
+    registrar('acesso.periodo_alterado', { entidade: 'clients', id: ctx.cliente.id, cliente: ctx.cliente.id, detalhes: { ate: expira ? fmtData(expira) : 'sem prazo' } });
+    avisar(expira ? 'Acesso válido até ' + fmtData(expira) + '.' : 'Acesso sem prazo.', 'ok'); await recarregar(p, ctx);
   },
   async senha(p, ctx) {
     if (!(await confirmar('Gerar nova senha?', 'A senha atual do cliente deixa de funcionar imediatamente.', { rotulo: 'Gerar nova senha' }))) return;

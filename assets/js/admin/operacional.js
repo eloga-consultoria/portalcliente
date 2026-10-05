@@ -4,7 +4,7 @@
 import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, $$, debounce, fmtData, fmtDataHora, imprimirDocumento, nomeArquivo } from '../core/dom.js';
 import { avisar, avisarErro, confirmar, ocupado } from '../core/ui.js';
-import { CATALOG, FRONT_KEYS, QB, QC, QD, CRIT, PH, estadoPadrao, mesclar, num, candidatas, sc, avaliar, semearOpcoes, somarDias,
+import { COBRANCA_EXTRA, CATALOG, FRONT_KEYS, QB, QC, QD, CRIT, PH, estadoPadrao, mesclar, num, candidatas, sc, avaliar, semearOpcoes, somarDias,
   DIAS, ESPECIALIDADES, COBRANCAS, SISTEMAS, NIVEL_SISTEMA, capacidade, recorrente, usaFrentes } from './operacional-modelo.js';
 import { carregarCatalogo } from './catalogo.js';
 import { brl } from '../core/dom.js';
@@ -270,6 +270,16 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         <div class="grid g2" style="margin-top:12px">
           <div class="field"><label>Encontros presenciais incluídos (Osasco / São Paulo)</label><input type="number" min="0" data-k="proposal.onsite" data-num value="${P.onsite}"></div>
           <div class="field"><label>Forma de pagamento</label><input type="text" data-k="proposal.payment" value="${P.payment}"></div></div>
+        <h3 style="margin:18px 0 6px">Custos adicionais</h3>
+        <p class="xs muted" style="margin:0 0 8px">Ex.: deslocamento, encontro presencial extra, sistema de terceiros. Aparecem junto aos valores, no fim da proposta.</p>
+        ${(P.extras || []).map((x, i) => html`<div class="grid" style="grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px">
+          <div class="field"><label>Descrição</label><input type="text" maxlength="160" data-k="proposal.extras.${i}.desc" value="${x.desc || ''}" placeholder="Ex.: deslocamento para encontro presencial"></div>
+          <div class="field"><label>Cobrança</label><select data-k="proposal.extras.${i}.cobranca">${COBRANCA_EXTRA.map(([v, t]) => html`<option value="${v}" ${x.cobranca === v ? html`selected` : ''}>${t}</option>`)}</select></div>
+          <div class="field"><label>Valor (R$)</label><input type="number" min="0" step="0.01" data-k="proposal.extras.${i}.valor" data-num value="${x.valor ?? ''}"></div>
+          <button class="btn sm danger" type="button" data-remover-extra="${i}" aria-label="Remover custo">Remover</button></div>`)}
+        <button class="btn sm secondary" type="button" data-acao="adicionar-extra">+ Adicionar custo adicional</button>
+        <div class="field" style="margin-top:14px"><label>Informações adicionais (aparecem nas condições da proposta)</label>
+          <textarea data-k="proposal.infoAdicional" rows="3" maxlength="1500" placeholder="Ex.: reajuste, condições especiais, observações sobre o escopo">${P.infoAdicional || ''}</textarea></div>
       </div>
       <div class="area-doc">
         <div class="toolbar no-print" style="margin-bottom:12px"><span class="small muted" style="margin-right:auto">${emitidaAtual ? html`Proposta <b>${P.code}</b> emitida em ${fmtData(emitidaAtual.issued_at)}. Alterações exigem nova versão.` : 'Rascunho: confira antes de emitir.'}</span>
@@ -310,7 +320,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       const t = e.target;
       if (t.dataset.chk) { set(t.dataset.chk, t.checked); mudou(); redesenhar(); return; }
       if (t.dataset.secao) { state.report.secoes = { ...(state.report.secoes || {}), [t.dataset.secao]: t.checked }; mudou(); redesenhar(); return; }
-      if (t.dataset.k && (t.tagName === 'SELECT' || /auto\.pillars/.test(t.dataset.k))) redesenhar();
+      if (t.dataset.k && (t.tagName === 'SELECT' || /auto\.pillars|proposal\.(extras|infoAdicional|onsite|payment)/.test(t.dataset.k))) redesenhar();
       if (t.dataset.preco || t.dataset.opMeses) redesenhar();
       if (t.dataset.opTipo) {
         const op = state.proposal.options[+t.dataset.opTipo]; op.type = t.value;
@@ -338,6 +348,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       if (b.dataset.nota) { const [k, c, nn] = b.dataset.nota.split('|'); const s = sc(state, k); s[c] = s[c] === +nn ? null : +nn; mudou(); redesenhar(); return; }
       if (b.dataset.removerAchado) { state.matrix.findings.splice(+b.dataset.removerAchado, 1); mudou(); redesenhar(); return; }
       if (b.dataset.opFrente) { const [i, k] = b.dataset.opFrente.split('|'); const a = state.proposal.options[+i].fronts, j = a.indexOf(k); j > -1 ? a.splice(j, 1) : a.push(k); mudou(); redesenhar(); return; }
+      if (b.dataset.removerExtra) { state.proposal.extras.splice(+b.dataset.removerExtra, 1); mudou(); redesenhar(); return; }
       if (b.dataset.reimprimir) { const p = emitidas.find((x) => x.id === b.dataset.reimprimir); return imprimirSnapshot(p); }
       switch (b.dataset.acao) {
         case 'reaplicar':
@@ -353,6 +364,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         case 'mais-achado': if (state.matrix.findings.length < 5) { state.matrix.findings.push({ t: '', i: '' }); mudou(); redesenhar(); } break;
         case 'atualizar-doc': redesenhar(); avisar('Documento atualizado.'); break;
         case 'pdf-relatorio': await ocupado(b, gerarRelatorio); break;
+        case 'adicionar-extra': (state.proposal.extras ||= []).push({ desc: '', cobranca: 'unico', valor: '' }); mudou(); redesenhar(); break;
         case 'emitir-proposta': await ocupado(b, emitirProposta); redesenhar(); break;
         case 'pdf-proposta': imprimirDocumento($('#doc-proposta', el), 'ELOGA_Proposta_' + state.proposal.code + '_' + nomeArquivo(cliente.name)); registrar('proposta.pdf_gerado', { entidade: 'proposals', id: state.proposal.code, cliente: cliente.id }); break;
         case 'nova-versao':

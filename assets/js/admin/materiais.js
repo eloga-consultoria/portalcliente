@@ -56,8 +56,18 @@ export async function render(el) {
       if (!TIPOS[f.type]) return avisar('Use PDF, PNG, JPG ou WebP.', 'bad');
       if (f.size > 20 * 1048576) return avisar('O arquivo passa de 20 MB. Use um link do Drive.', 'bad');
       if (usado + f.size > LIMITE_GRATUITO * 0.95) return avisar('O espaço gratuito está quase no limite. Use um link do Drive.', 'bad');
+      // Lê o arquivo antes de enviar: no celular, arquivos escolhidos direto do Drive/nuvem
+      // podem não estar disponíveis e o envio falharia sem explicação.
+      let conteudo;
+      try { conteudo = new Blob([await f.arrayBuffer()], { type: f.type }); }
+      catch { return avisar('Não foi possível ler o arquivo neste aparelho. Baixe-o para a memória do celular (ou use o computador) e tente de novo.', 'bad'); }
       const caminho = `${crypto.randomUUID()}/${slug(tit) || 'material'}.${TIPOS[f.type]}`;
-      await q(db.storage.from('materiais').upload(caminho, f, { contentType: f.type, upsert: false }));
+      try {
+        await q(db.storage.from('materiais').upload(caminho, conteudo, { contentType: f.type, upsert: false }));
+      } catch (err) {
+        if (/fetch|network|load failed/i.test(err?.message || '')) return avisar('O envio foi interrompido. Verifique a internet e tente de novo; para arquivos grandes, prefira o computador ou um link do Drive.', 'bad');
+        throw err;
+      }
       try {
         await q(db.from('materials').insert({ titulo: tit, descricao: $('#a-desc', el).value.trim() || null, tipo: 'arquivo', storage_path: caminho, tamanho: f.size, mime: f.type }));
       } catch (err) { await db.storage.from('materiais').remove([caminho]); throw err; }

@@ -10,7 +10,7 @@ export const ACOES = {
   'cliente.excluido_definitivo': 'Cliente excluído definitivamente', 'cliente.aberto': 'Cadastro consultado',
   'profiles.criado': 'Login vinculado ao cliente', 'profiles.alterado': 'Perfil de acesso alterado', 'profiles.excluido': 'Login desvinculado',
   'acesso.criado': 'Acesso ao portal criado', 'acesso.senha_redefinida': 'Nova senha gerada', 'acesso.email_alterado': 'E-mail de acesso alterado',
-  'acesso.bloqueado': 'Acesso bloqueado', 'acesso.desbloqueado': 'Acesso desbloqueado', 'acesso.negado': 'Acesso negado',
+  'acesso.bloqueado': 'Acesso bloqueado', 'acesso.periodo_alterado': 'Período de acesso alterado', 'acesso.desbloqueado': 'Acesso desbloqueado', 'acesso.negado': 'Acesso negado',
   'sessao.login': 'Entrou no portal', 'sessao.logout': 'Saiu do portal', 'sessao.expirada': 'Sessão encerrada por inatividade', 'sessao.senha_alterada': 'Trocou a própria senha',
   'mfa.ativado': 'Verificação em duas etapas ativada', 'consents.criado': 'Termo LGPD aceito',
   'posicionamento.liberado': 'Posicionamento liberado', 'posicionamento.bloqueado': 'Posicionamento retirado',
@@ -28,7 +28,7 @@ export const ACOES = {
   'materials.criado': 'Material cadastrado', 'materials.excluido': 'Material excluído', 'material_access.criado': 'Material liberado ao cliente',
   'material_access.alterado': 'Permissão de download alterada', 'material_access.excluido': 'Material retirado do cliente', 'material.liberacoes': 'Liberações de material salvas',
   'configuracao.catalogo_salvo': 'Catálogo de programas salvo', 'app_settings.criado': 'Configuração criada', 'app_settings.alterado': 'Configuração alterada',
-  'cliente.documento_aberto': 'Cliente abriu documento', 'cliente.material_aberto': 'Cliente abriu material', 'cliente.plano_aberto': 'Cliente abriu o plano de ação', 'auditoria.exportada': 'Auditoria exportada', 'auditoria.expurgo': 'Expurgo automático (5 anos)',
+  'cliente.documento_aberto': 'Cliente abriu documento', 'cliente.material_aberto': 'Cliente abriu material', 'cliente.plano_aberto': 'Cliente abriu o plano de ação', 'cliente.plano_editado': 'Cliente editou o plano de ação', 'plano.edicao_cliente': 'Edição do plano pelo cliente (liberada/retirada)', 'auditoria.exportada': 'Auditoria exportada', 'auditoria.expurgo': 'Expurgo automático (5 anos)',
 };
 const GRUPOS = [
   ['', 'Todas as ações'], ['sessao.', 'Acessos e sessões'], ['acesso.', 'Gestão de acessos'], ['clients.', 'Cadastro de clientes'],
