@@ -4,6 +4,7 @@
 import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, fmtDataHora, baixar } from '../core/dom.js';
 import { avisar, avisarErro, ocupado } from '../core/ui.js';
+import { CONFIG } from '../config.js';
 
 const TABELAS = ['clients', 'profiles', 'assessments', 'self_assessments', 'operational_diagnoses', 'proposals', 'consents',
   'app_settings', 'client_documents', 'action_plans', 'action_plan_views', 'materials', 'material_access', 'audit_log'];
@@ -63,8 +64,8 @@ export async function render(el) {
     </div>
     <div class="card" style="margin-top:16px"><h2>Onde guardar</h2>
       <ul class="small"><li><b>Regra 3-2-1:</b> 3 cópias, em 2 lugares diferentes, 1 fora do computador (ex.: Google Drive da ELOGA e um pendrive guardado).</li>
-        <li><b>Frequência:</b> ao menos 1 vez por mês e sempre antes de excluir clientes em lote. O painel lembra você após ${30} dias.</li>
-        <li><b>Backup automático semanal:</b> configure o fluxo do GitHub (docs/BACKUP.md). Ele copia o banco inteiro, criptografado, sem custo.</li>
+        <li><b>Frequência:</b> ao menos 1 vez por mês e sempre antes de excluir clientes em lote. O painel lembra você após ${CONFIG.lembreteBackupDias} dias.</li>
+        <li><b>Backup automático (2 vezes por semana):</b> configure o fluxo do GitHub (docs/BACKUP.md). Ele copia o banco inteiro, criptografado, sem custo.</li>
         <li>Nunca envie o arquivo e a senha pelo mesmo canal.</li></ul></div>
     <div class="card" style="margin-top:16px"><h2>Últimos backups pelo portal</h2>
       ${historico.length ? html`<div class="table-wrap"><table class="t"><thead><tr><th>Quando</th><th>Quem</th><th>Conteúdo</th></tr></thead><tbody>

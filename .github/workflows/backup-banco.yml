@@ -1,0 +1,70 @@
+# Backup automático e CRIPTOGRAFADO do banco do portal (gratuito).
+# Roda segunda e quinta de manhã e também quando você clica em "Run workflow".
+# Também mantém o projeto gratuito do Supabase ativo (ele pausa após 7 dias sem uso).
+#
+# Segredos necessários (Settings > Secrets and variables > Actions):
+#   SUPABASE_DB_URL  "Session pooler" do Supabase (Connect > Session pooler), com a senha do banco
+#   BACKUP_SENHA     senha longa (20+ caracteres) usada para criptografar. Guarde-a fora do GitHub:
+#                    sem ela o backup não abre.
+# O repositório é público: o arquivo gerado só é seguro porque sai criptografado (AES-256).
+name: Backup do banco
+on:
+  schedule:
+    - cron: '17 9 * * 1,4'   # segunda e quinta, 06:17 (horário de Brasília)
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: backup-banco
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conferir segredos
+        id: cfg
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+          SENHA: ${{ secrets.BACKUP_SENHA }}
+        run: |
+          if [ -z "$DB" ] || [ -z "$SENHA" ]; then
+            echo "Backup ainda não configurado (faltam SUPABASE_DB_URL e/ou BACKUP_SENHA). Nada a fazer."
+            echo "pronto=nao" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ ${#SENHA} -lt 20 ]; then echo "BACKUP_SENHA precisa ter 20 caracteres ou mais."; exit 1; fi
+          echo "pronto=sim" >> "$GITHUB_OUTPUT"
+      - name: Instalar pg_dump 17
+        if: steps.cfg.outputs.pronto == 'sim'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Gerar backup criptografado
+        if: steps.cfg.outputs.pronto == 'sim'
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+          SENHA: ${{ secrets.BACKUP_SENHA }}
+        run: |
+          set -euo pipefail
+          umask 077
+          PG=/usr/lib/postgresql/17/bin
+          D=$(date -u +%Y-%m-%d_%H%M)
+          mkdir -p tmp
+          # Estrutura + dados do portal (tabelas, regras de acesso, funções, auditoria)
+          $PG/pg_dump "$DB" --schema=public --schema=app --no-owner --no-privileges -Fc -f tmp/portal.dump
+          # Logins (para restaurar acessos): só dados das tabelas de autenticação
+          $PG/pg_dump "$DB" --data-only --table=auth.users --table=auth.identities --table=auth.mfa_factors -Fc -f tmp/logins.dump
+          $PG/pg_restore -l tmp/portal.dump >/dev/null   # confere se o arquivo abre
+          tar -C tmp -cf - portal.dump logins.dump \
+            | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 \
+                  -o "eloga-backup-$D.tar.gpg" 3<<<"$SENHA"
+          rm -rf tmp
+          ls -lh eloga-backup-*.tar.gpg
+      - uses: actions/upload-artifact@v4
+        if: steps.cfg.outputs.pronto == 'sim'
+        with:
+          name: eloga-backup-${{ github.run_number }}
+          path: eloga-backup-*.tar.gpg
+          retention-days: 90
+          if-no-files-found: error

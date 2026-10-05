@@ -1,0 +1,8 @@
+# Configuração mínima usada só para publicar as edge functions (workflow "Publicar funções").
+project_id = "portal-eloga"
+
+[functions.admin-clientes]
+verify_jwt = true
+
+[functions.enviar-posicionamento]
+verify_jwt = true
