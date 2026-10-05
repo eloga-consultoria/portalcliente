@@ -37,7 +37,7 @@ function filtrar(linhas, params) {
 
 export async function ligar(page, banco, usuarioAtual) {
   const log = [];
-  await page.route(/skatnnwkxcbzmoohexsx\.supabase\.co/, async (route) => {
+  await page.route(/[a-z0-9]{20}\.supabase\.co/, async (route) => {
     const req = route.request(), url = new URL(req.url()), metodo = req.method();
     const corpo = req.postData() ? (() => { try { return JSON.parse(req.postData()); } catch { return req.postData(); } })() : null;
     const json = (status, obj, headers = {}) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*', ...headers }, body: obj === undefined ? '' : JSON.stringify(obj) });

@@ -41,7 +41,8 @@ Os PDFs do site são importados manualmente no menu **Importar**.
 
 ## Etapa 2 — Banco (SQL Editor)
 
-No projeto de **teste**, abra **SQL Editor > New query** e rode, um por vez, nesta ordem
+**Atalho:** no projeto de teste, cole de uma vez o arquivo `supabase/teste/TUDO_PROJETO_TESTE.sql`
+(é a junção dos itens abaixo). Ou rode, um por vez, nesta ordem
 (abra o arquivo aqui no GitHub, clique em **Copy raw file**, cole e clique **Run**):
 
 | Ordem | Arquivo | Para quê |
