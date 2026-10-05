@@ -53,6 +53,7 @@ Os PDFs do site são importados manualmente no menu **Importar**.
 | 4 | `supabase/migrations/003_auditoria.sql` | Auditoria (5 anos, não apagável) |
 | 5 | `supabase/migrations/004_portal_cliente.sql` | Liberações, documentos, plano de ação, materiais, catálogo |
 | 6 | `supabase/migrations/005_compatibilidade_portal_antigo.sql` | Ajusta as tabelas do portal antigo sem perder dados e fecha as que não são mais usadas |
+| 7 | `supabase/migrations/006_ajustes_verificador.sql` | Ajustes finos pedidos pelo verificador de segurança do Supabase |
 
 ✅ Esperado: "Success. No rows returned" em todos.
 Se aparecer erro, **pare** e envie o print da mensagem (sem dados de clientes).
@@ -147,7 +148,7 @@ Supabase > **Edge Functions > Secrets > Add new secret**:
    Confira que o arquivo apareceu.
 2. Rode no oficial o `000_inspecao_somente_leitura.sql` (não altera nada) e me envie o resultado:
    eu confiro se a estrutura bate com o que as migrations esperam.
-3. Com o "ok" da conferência e **a sua autorização escrita**, rode **001 → 005** no oficial
+3. Com o "ok" da conferência e **a sua autorização escrita**, rode **001 → 006** no oficial
    (**não** rode o arquivo da pasta `supabase/teste`).
 4. Ajuste as configurações de login (Etapa 2) e os segredos (Etapa 4.2) no oficial.
 5. Troque o segredo `SUPABASE_PROJECT_REF` no GitHub pelo código oficial e rode **Publicar funções** de novo.
