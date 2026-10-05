@@ -2,10 +2,10 @@
 // A chave abaixo é a chave PUBLICÁVEL do Supabase: ela só permite o que as regras
 // de acesso (RLS) do banco autorizam.
 export const CONFIG = Object.freeze({
-  // AMBIENTE DE TESTE (eloga-portal-teste). Na passagem para o oficial volta para
-  // https://skatnnwkxcbzmoohexsx.supabase.co e a chave sb_publishable_rBPxk_InKeL4JRYPoEfvVw_EK5YlrXg.
-  supabaseUrl: 'https://qqwcjvsaiyghbnrsdjkp.supabase.co',
-  supabaseKey: 'sb_publishable__MV6Jm26pU_dkTxSC4Wlzw_bUQT0w_i',
+  // PROJETO OFICIAL (ELOGA Portal Estratégico). O projeto de teste (qqwcjvsaiyghbnrsdjkp)
+  // fica pausado e só é usado para testar mudanças antes de aplicá-las aqui.
+  supabaseUrl: 'https://skatnnwkxcbzmoohexsx.supabase.co',
+  supabaseKey: 'sb_publishable_rBPxk_InKeL4JRYPoEfvVw_EK5YlrXg',
 
   agendaUrl: 'https://calendar.app.google/opu1h9YWeJ3hd7YK9',
   contato: {
