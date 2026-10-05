@@ -169,7 +169,7 @@ begin
   if p_action !~ '^[a-z_]{2,30}\.[a-z_]{2,30}$' then raise exception 'Ação inválida.' using errcode = '22023'; end if;
   if pg_column_size(p_details) > 8000 then raise exception 'Detalhes muito grandes.' using errcode = '22023'; end if;
   if not app.is_admin() then
-    if p_action not in ('sessao.login','sessao.logout','sessao.expirada','acesso.negado','mfa.ativado') then
+    if p_action not in ('sessao.login','sessao.logout','sessao.expirada','sessao.senha_alterada','acesso.negado','mfa.ativado') then
       raise exception 'Acesso negado.' using errcode = '42501';
     end if;
     p_client_id := app.my_client_id();
