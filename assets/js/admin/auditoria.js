@@ -22,12 +22,18 @@ export const ACOES = {
   'operational_diagnoses.excluido': 'Diagnóstico operacional removido', 'relatorio.pdf_gerado': 'PDF do relatório gerado',
   'proposals.criado': 'Proposta emitida', 'proposals.alterado': 'Situação da proposta alterada', 'proposals.excluido': 'Proposta removida', 'proposta.pdf_gerado': 'PDF da proposta gerado',
   'importacao.concluida': 'Importação de PDF concluída', 'exportacao.planilha': 'Planilha exportada', 'exportacao.json': 'Dados exportados (JSON)',
-  'backup.exportado': 'Backup completo exportado', 'auditoria.exportada': 'Auditoria exportada', 'auditoria.expurgo': 'Expurgo automático (5 anos)',
+  'backup.exportado': 'Backup completo exportado', 'documento.publicado': 'Documento publicado para o cliente',
+  'client_documents.criado': 'Documento publicado', 'client_documents.alterado': 'Publicação alterada', 'client_documents.excluido': 'Documento retirado do portal',
+  'plano.criado': 'Plano de ação criado', 'action_plans.criado': 'Plano de ação criado', 'action_plans.excluido': 'Plano de ação removido',
+  'materials.criado': 'Material cadastrado', 'materials.excluido': 'Material excluído', 'material_access.criado': 'Material liberado ao cliente',
+  'material_access.alterado': 'Permissão de download alterada', 'material_access.excluido': 'Material retirado do cliente', 'material.liberacoes': 'Liberações de material salvas',
+  'configuracao.catalogo_salvo': 'Catálogo de programas salvo', 'app_settings.criado': 'Configuração criada', 'app_settings.alterado': 'Configuração alterada',
+  'cliente.documento_aberto': 'Cliente abriu documento', 'cliente.material_aberto': 'Cliente abriu material', 'cliente.plano_aberto': 'Cliente abriu o plano de ação', 'auditoria.exportada': 'Auditoria exportada', 'auditoria.expurgo': 'Expurgo automático (5 anos)',
 };
 const GRUPOS = [
   ['', 'Todas as ações'], ['sessao.', 'Acessos e sessões'], ['acesso.', 'Gestão de acessos'], ['clients.', 'Cadastro de clientes'],
   ['cliente.excluido_definitivo', 'Exclusões definitivas'], ['posicionamento.', 'Posicionamento'], ['self_assessments.', 'Importações'],
-  ['operational_diagnoses.', 'Diagnóstico operacional'], ['propos', 'Propostas'], ['relatorio.', 'Relatórios'], ['exportacao.', 'Exportações'], ['backup.', 'Backups'],
+  ['operational_diagnoses.', 'Diagnóstico operacional'], ['propos', 'Propostas'], ['relatorio.', 'Relatórios'], ['exportacao.', 'Exportações'], ['backup.', 'Backups'], ['cliente.', 'Acessos do cliente a conteúdos'], ['material', 'Materiais'],
 ];
 export const rotuloAcao = (a) => ACOES[a] || a;
 const CRITICAS = /excluido|bloqueado|negado|falhou|expurgo|backup|exportacao|exportada/;

@@ -60,7 +60,7 @@ if (PDFS.length) {
   await passo('06-conferencia-gravar', async () => {
     await page.fill('[data-campo="identificacao.email"]', 'maria@clinica-teste.com.br');
     await page.click('#f-conf [type=submit]');
-    await page.waitForSelector('.tab[aria-selected=true]:has-text("Autodiagnóstico")', { timeout: 15000 });
+    await page.waitForSelector('.cli-menu [aria-current=page]:has-text("Autodiagnóstico")', { timeout: 15000 });
     clienteId = banco.clients[0]?.id;
   });
 }
@@ -72,7 +72,15 @@ const abaCliente = async (aba, nome, extra) => passo(nome, async () => {
   await page.goto(`${BASE}#/cliente/${clienteId}/${aba}`); await page.waitForSelector('#painel-aba > :not(.loading)'); if (extra) await extra();
 });
 await abaCliente('preparacao', '07-preparacao');
-await abaCliente('sessao', '08-sessao', async () => { await page.click('[data-acao="cron"]'); await page.fill('[data-k="session.A.0"]', 'Fono, TO, Psicologia e ABA'); await page.waitForTimeout(1500); });
+await abaCliente('sessao', '08-sessao', async () => {
+  await page.click('[data-acao="cron"]');
+  await page.fill('[data-k="session.ctx.salas"]', '4'); await page.fill('[data-k="session.ctx.profissionais"]', '3');
+  await page.fill('[data-k="session.ctx.simultaneos"]', '2'); await page.fill('[data-k="session.ctx.atendimentosMes"]', '900');
+  await page.fill('[data-k="session.ctx.valorSessao"]', '150');
+  await page.click('[data-lista="session.ctx.especialidades"][data-v="ABA"]'); await page.click('[data-lista="session.ctx.cobranca"][data-v="Pacote de sessões"]');
+  await page.waitForFunction(() => document.querySelector('#caixa-capacidade')?.textContent.includes('1.300'));
+  await page.waitForTimeout(1200);
+});
 await abaCliente('matriz', '09-matriz', async () => {
   const b = page.locator('[data-nota]'); const n = await b.count();
   for (const alvo of ['|g|3', '|i|2', '|u|3', '|p|2']) { const el = page.locator(`[data-nota$="${alvo}"]`).first(); if (await el.count()) await el.click(); }
@@ -91,6 +99,26 @@ await abaCliente('visao', '12-visao-geral', async () => {
   await page.waitForSelector('.badge.purple:text("Liberado")');
 });
 await abaCliente('autodiagnostico', '13-autodiagnostico');
+await abaCliente('portal', '13b-liberacoes', async () => {
+  await page.check('[data-lib="plano"]'); await page.waitForTimeout(300);
+  await page.check('[data-lib="dashboard"]'); await page.waitForTimeout(300);
+  await page.click('[data-publicar="relatorio"]'); await page.waitForSelector('[data-retirar="relatorio"]');
+  await page.check('[data-baixar="relatorio"]');
+});
+// plano de ação de exemplo (o painel isolado só grava quando há edição)
+const planoExemplo = { current: 'x', clients: { x: { nome: "Clínica Teste D'Ávila", periodoInicio: '2026-10-01', periodoFim: '2027-03-31', planoVersao: 3, plano: [
+  { id: 'd1', pilar: 'faturamento', what: 'Implantar conferência de agenda antes do faturamento', why: 'Sessões não faturadas', who: 'Recepção', when: '2026-10-30', status: 'Em andamento', progresso: 40, inicio: '2026-10-06', checks: {} },
+  { id: 'd2', pilar: 'comercial', what: 'Registrar origem de cada novo contato', why: 'Sem dados de canal', who: 'Comercial', when: '2026-10-20', status: 'Concluído', progresso: 100, inicio: '2026-10-06', concluidoEm: '2026-10-15', checks: {} },
+  { id: 'd3', pilar: 'qualidade', what: 'Implantar pesquisa de satisfação (NPS)', why: 'Sem medição da experiência', who: 'Gestão', when: '2026-11-15', status: 'Não iniciado', progresso: 0, checks: {} }] } } };
+await abaCliente('plano', '13c-plano-admin', async () => { await page.waitForSelector('iframe.painel-frame'); await page.waitForTimeout(2500); });
+banco.action_plan_views = [{ client_id: clienteId, dados: planoExemplo }];
+await passo('13d-materiais', async () => {
+  await page.goto(BASE + '#/materiais'); await page.waitForSelector('#f-link');
+  await page.fill('#l-tit', 'E-book Jornada do Paciente'); await page.fill('#l-url', 'https://drive.google.com/exemplo');
+  await page.click('#f-link [type=submit]'); await page.waitForSelector('text=E-book Jornada do Paciente');
+  banco.material_access.push({ material_id: banco.materials[0].id, client_id: clienteId, pode_baixar: false });
+});
+await passo('13e-programas', async () => { await page.goto(BASE + '#/configuracoes'); await page.waitForSelector('[data-formato]'); });
 await abaCliente('historico', '14-historico');
 await passo('15-auditoria', async () => { await page.goto(BASE + '#/auditoria'); await page.waitForSelector('#lista table, #lista .empty'); });
 await passo('16-backup', async () => { await page.goto(BASE + '#/backup'); await page.waitForSelector('#f-bkp'); });
@@ -116,25 +144,32 @@ await passo('22-cliente-termo', async () => {
   await page.fill('#s-nova', 'Clinica-Segura-2026!'); await page.fill('#s-conf', 'Clinica-Segura-2026!'); await page.click('#f-senha [type=submit]');
   await page.waitForSelector('#f-termo');
 });
-await passo('23-cliente-boas-vindas', async () => { await page.check('#t-ok'); await page.click('#f-termo [type=submit]'); await page.waitForSelector('#comecar'); });
+await passo('23-cliente-abertura', async () => {
+  await page.check('#t-ok'); await page.click('#f-termo [type=submit]');
+  await page.waitForSelector('.abertura'); await page.waitForTimeout(3600);
+});
+await passo('23b-cliente-inicio', async () => {
+  await page.click('.abertura .pular'); await page.waitForSelector('.cartao-portal'); await page.waitForTimeout(700);
+});
 await passo('24-cliente-etapa1', async () => {
-  await page.click('#comecar'); await page.waitForSelector('.stepper');
+  await page.click('a[href="#/posicionamento"]'); await page.waitForSelector('#comecar'); await page.click('#comecar'); await page.waitForSelector('.stepper');
   await page.fill('#q_p1_story', 'Nasceu para oferecer cuidado integrado à família — com "aspas" e acentuação.');
-  await page.locator('[data-q="p1_values"]').first().check();
-  await page.locator('[name="q_p1_score"][value="3"]').check();
+  await page.locator('label.chip:has([data-q="p1_values"])').first().click();
+  await page.locator('label.chip:has([name="q_p1_score"][value="3"])').click();
   await page.click('[data-guia="p1_story"]'); await page.waitForSelector('.drawer'); await page.screenshot({ path: `${SAIDA}/24b-guia.png` }); await page.keyboard.press('Escape');
   await page.waitForFunction(() => /Salvo/.test(document.querySelector('#saveflag')?.textContent || ''), null, { timeout: 8000 });
 });
-await passo('25-cliente-revisao', async () => {
-  for (let i = 0; i < 6; i++) await page.click('#avancar');
-  await page.waitForSelector('#enviar');
-});
+await passo('25-cliente-revisao', async () => { for (let i = 0; i < 6; i++) await page.click('#avancar'); await page.waitForSelector('#enviar'); });
 await passo('26-cliente-enviado', async () => {
   await page.click('#enviar'); await confirmarModal('Enviar agora');
   await page.waitForSelector('.thanks h1:text("Obrigada")');
   if (banco.assessments[0]?.status !== 'submitted') throw new Error('não marcou como enviado');
 });
-await passo('27-cliente-reentrada', async () => { await page.goto(BASE + '#/inicio'); await page.reload(); await page.waitForSelector('.thanks'); });
+await passo('27-cliente-relatorio', async () => { await page.goto(BASE + '#/documento/relatorio'); await page.waitForSelector('#doc-cliente .cover'); });
+await passo('27b-cliente-plano', async () => { await page.goto(BASE + '#/plano/plano'); await page.waitForSelector('iframe.painel-frame'); await page.waitForTimeout(2500); });
+await passo('27c-cliente-dashboard', async () => { await page.goto(BASE + '#/plano/dashboard'); await page.waitForSelector('iframe.painel-frame'); await page.waitForTimeout(2500); });
+await passo('27d-cliente-materiais', async () => { await page.goto(BASE + '#/materiais'); await page.waitForSelector('text=E-book Jornada do Paciente'); });
+await passo('27e-cliente-inicio-final', async () => { await page.goto(BASE + '#/inicio'); await page.waitForSelector('.cartao-portal'); });
 
 // celular
 await passo('28-celular', async () => { await page.setViewportSize({ width: 390, height: 844 }); await page.goto(BASE + '#/conta'); await page.waitForSelector('#f-pw'); });

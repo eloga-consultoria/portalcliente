@@ -49,7 +49,14 @@ export const fmtData = (d) => (d ? new Date(d.length === 10 ? d + 'T12:00:00' : 
 export const fmtDataHora = (d) => (d ? new Date(d).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 export const brl = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 export const hojeIso = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
-export function debounce(fn, ms) { let t; const f = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; f.flush = (...a) => { clearTimeout(t); return fn(...a); }; f.cancel = () => clearTimeout(t); return f; }
+/** Adia a execução; flush() executa já a chamada pendente (com os últimos argumentos), se houver. */
+export function debounce(fn, ms) {
+  let t = null, ultimos = [];
+  const f = (...a) => { ultimos = a; clearTimeout(t); t = setTimeout(() => { t = null; fn(...ultimos); }, ms); };
+  f.flush = () => { if (t === null) return fn.length ? undefined : fn(); clearTimeout(t); t = null; return fn(...ultimos); };
+  f.cancel = () => { clearTimeout(t); t = null; };
+  return f;
+}
 export const slug = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 export const nomeArquivo = (s) => String(s || 'cliente').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
 

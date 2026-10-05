@@ -7,6 +7,7 @@ export function criarBanco() {
   const agora = new Date().toISOString();
   return {
     clients: [], profiles: [], assessments: [], self_assessments: [], operational_diagnoses: [], proposals: [], consents: [], audit_log: [],
+    app_settings: [], client_documents: [], action_plans: [], action_plan_views: [], materials: [], material_access: [],
     usuarios: {}, seq: 0, agora,
   };
 }
@@ -89,6 +90,16 @@ export async function ligar(page, banco, usuarioAtual) {
         return json(200, out, hdr);
       }
       if (metodo === 'POST') {
+        const CHAVES = { app_settings: ['key'], action_plans: ['client_id'], action_plan_views: ['client_id'], client_documents: ['client_id', 'tipo'], material_access: ['material_id', 'client_id'] };
+        if ((req.headers()['prefer'] || '').includes('merge-duplicates') && CHAVES[tabela]) {
+          const ks = (url.searchParams.get('on_conflict') || '').split(',').filter(Boolean).length ? url.searchParams.get('on_conflict').split(',') : CHAVES[tabela];
+          const saida = [];
+          for (const x of (Array.isArray(corpo) ? corpo : [corpo])) {
+            const ex = banco[tabela].find((r) => ks.every((k) => r[k] === x[k]));
+            if (ex) { Object.assign(ex, x); saida.push(ex); } else { const n = { id: crypto.randomUUID(), ...x }; banco[tabela].push(n); saida.push(n); }
+          }
+          return json(201, umObjeto ? saida[0] : saida);
+        }
         const itens = (Array.isArray(corpo) ? corpo : [corpo]).map((x) => ({ id: crypto.randomUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...x }));
         if (tabela === 'assessments') itens.forEach((x) => { x.created_by = usuarioAtual.u.id; x.status = 'draft'; });
         banco[tabela].push(...itens);

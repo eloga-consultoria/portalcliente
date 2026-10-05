@@ -4,7 +4,7 @@ import { CONFIG } from '../config.js';
 import { html, montar, $, urlSegura } from './dom.js';
 import { mensagemErro, avisar, ocupado } from './ui.js';
 
-const LOGO = 'assets/img/eloga-logo.png';
+const LOGO = 'assets/img/eloga-marca-clara.png';
 
 // ------------------------------------------------------------- senha forte
 export function avaliarSenha(s) {
@@ -38,17 +38,18 @@ function ligarMostrarSenha(root) {
 function telaAuth(root, conteudo) {
   montar(root, html`<div class="auth">
     <aside class="auth-side">
-      <img src="${LOGO}" alt="ELOGA Consultoria & Estratégias em Saúde" class="brandlogo" style="height:46px">
+      <img src="${LOGO}" alt="ELOGA" class="auth-logo">
       <div>
         <h1>Diagnóstico estratégico <em>da sua clínica</em>.</h1>
-        <p>Um ambiente exclusivo para clientes da ELOGA conduzirem o diagnóstico com método, confidencialidade e foco em resultado.</p>
-        <ul class="trust">
-          <li><span class="ic">1</span><span><b>Acesso individual</b>Cada clínica vê somente as próprias informações.</span></li>
-          <li><span class="ic">2</span><span><b>Dados protegidos</b>Conexão criptografada e regras de acesso no servidor.</span></li>
-          <li><span class="ic">3</span><span><b>LGPD</b>Sem dados de pacientes. Você pode solicitar a exclusão a qualquer momento.</span></li>
+        <p>O portal reúne, num só lugar, tudo o que você e a ELOGA constroem juntos.</p>
+        <ul class="beneficios">
+          <li><span class="ic" aria-hidden="true">→</span><span><b>Plano de ação acompanhado</b>Cada entrega do projeto com prazo, responsável e situação atualizados.</span></li>
+          <li><span class="ic" aria-hidden="true">→</span><span><b>Indicadores da evolução</b>Painel visual com o andamento das ações e os resultados da clínica.</span></li>
+          <li><span class="ic" aria-hidden="true">→</span><span><b>Materiais exclusivos</b>E-books, roteiros e ferramentas da ELOGA liberados para a sua clínica.</span></li>
+          <li><span class="ic" aria-hidden="true">→</span><span><b>Documentos do projeto</b>Relatórios e propostas sempre à mão, quando você precisar.</span></li>
         </ul>
       </div>
-      <p class="xs" style="color:#8fa6b2;position:relative;z-index:1">ELOGA · Consultoria &amp; Estratégias em Saúde</p>
+      <p class="slogan-rodape">Você decide transformar. Nós construímos juntos. Seu resultado é o nosso.</p>
     </aside>
     <section class="auth-main"><div class="auth-box">${conteudo}</div></section>
   </div>`);
@@ -197,7 +198,7 @@ export const TERMO = html`
   <b>Não informe dados de pacientes</b> (nomes, diagnósticos, documentos): o portal não foi feito para isso.</p>
   <p><b>Para quê:</b> elaborar o diagnóstico, as recomendações e a proposta de consultoria. Base legal: execução de procedimentos preliminares a contrato e legítimo interesse (art. 7º, V e IX, da LGPD).</p>
   <p><b>Com quem:</b> fornecedores de tecnologia que hospedam o portal e enviam e-mails (Supabase e Google), sob contrato e com dados protegidos. Não vendemos nem compartilhamos para publicidade.</p>
-  <p><b>Por quanto tempo:</b> durante o relacionamento e por até 5 anos após o encerramento, para comprovação das entregas; antes disso, você pode pedir a exclusão.</p>
+  <p><b>Por quanto tempo:</b> pelo tempo necessário às finalidades informadas e ao cumprimento de obrigações legais. Você pode pedir a exclusão a qualquer momento.</p>
   <p><b>Seus direitos (art. 18):</b> confirmação, acesso, correção, portabilidade, exclusão e revogação do consentimento, pelo e-mail ${CONFIG.contato.email}.</p>
   <p><b>Segurança:</b> acesso individual com senha, conexão criptografada, regras de acesso no servidor e registro de auditoria.</p>`;
 
@@ -218,7 +219,8 @@ export function telaTermo(root, { clientId, aoConcluir }) {
     if (!$('#t-ok', root).checked) { $('#t-erro', root).textContent = 'Marque a caixa para continuar.'; return; }
     await ocupado($('#f-termo [type=submit]', root), async () => {
       try {
-        await q(db.from('consents').insert({ client_id: clientId, term_version: CONFIG.termoVersao, user_agent: navigator.userAgent.slice(0, 300) }));
+        const { data: { user } } = await db.auth.getUser();
+        await q(db.from('consents').insert({ user_id: user.id, client_id: clientId, term_version: CONFIG.termoVersao, user_agent: navigator.userAgent.slice(0, 300) }));
         aoConcluir();
       } catch (err) { $('#t-erro', root).textContent = mensagemErro(err); }
     });

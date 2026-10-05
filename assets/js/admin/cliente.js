@@ -16,8 +16,15 @@ export const ETAPAS = {
   relatorio_emitido: 'Relatório emitido', proposta_emitida: 'Proposta emitida', cliente_ativo: 'Cliente ativo',
   nao_fechou: 'Não fechou', encerrado: 'Encerrado',
 };
-const ABAS = [['visao', 'Visão geral'], ['autodiagnostico', 'Autodiagnóstico'], ['preparacao', 'Preparação'], ['sessao', 'Sessão 45 min'],
-  ['matriz', 'Matriz'], ['relatorio', 'Relatório'], ['proposta', 'Proposta'], ['posicionamento', 'Posicionamento'], ['historico', 'Histórico']];
+// Menu lateral do cliente, agrupado pela jornada
+const GRUPOS = [
+  ['Cadastro', [['visao', 'Visão geral']]],
+  ['Diagnóstico', [['autodiagnostico', 'Autodiagnóstico'], ['preparacao', 'Preparação'], ['sessao', 'Diagnóstico operacional'], ['matriz', 'Matriz de encaixe'], ['relatorio', 'Relatório'], ['proposta', 'Proposta']]],
+  ['Consultoria', [['plano', 'Plano de ação (PDCA)']]],
+  ['Portal do cliente', [['portal', 'Liberações e materiais'], ['posicionamento', 'Posicionamento']]],
+  ['Registro', [['historico', 'Histórico']]],
+];
+const ABAS = GRUPOS.flatMap(([, itens]) => itens);
 const OPERACIONAIS = ['preparacao', 'sessao', 'matriz', 'relatorio', 'proposta'];
 
 export async function render(el, [id, abaInicial = 'visao']) {
@@ -42,8 +49,10 @@ export async function render(el, [id, abaInicial = 'visao']) {
       <p>${[cliente.segment, cliente.city].filter(Boolean).join(' · ') || 'Segmento e cidade não informados'}</p></div>
       <div class="row"><span id="saveflag" class="saveflag" aria-live="polite"></span>
         <div class="field" style="min-width:230px"><label for="etapa">Etapa</label><select id="etapa">${Object.entries(ETAPAS).map(([k, v]) => html`<option value="${k}" ${cliente.stage === k ? html`selected` : ''}>${v}</option>`)}</select></div></div></div>
-    <div class="tabs" role="tablist" aria-label="Seções do cliente">${ABAS.map(([k, t], i) => html`<button class="tab" role="tab" data-aba="${k}" aria-selected="${k === aba}"><span class="n">${i + 1}</span>${t}</button>`)}</div>
-    <div id="painel-aba" role="tabpanel"></div></div>`);
+    <div class="cli-layout">
+      <nav class="cli-menu" aria-label="Etapas do cliente">${GRUPOS.map(([g, itens]) => html`<p class="cli-grupo">${g}</p>
+        ${itens.map(([k, t]) => html`<button type="button" data-aba="${k}" aria-current="${k === aba ? 'page' : 'false'}">${t}</button>`)}`)}</nav>
+      <div id="painel-aba"></div></div></div>`);
 
   $('#etapa', el).addEventListener('change', async (e) => {
     try { await q(db.from('clients').update({ stage: e.target.value }).eq('id', id)); cliente.stage = e.target.value; avisar('Etapa atualizada.', 'ok'); }
@@ -55,15 +64,17 @@ export async function render(el, [id, abaInicial = 'visao']) {
     limparAba?.(); limparAba = null;
     aba = nova;
     history.replaceState(null, '', `#/cliente/${id}/${aba}`);
-    el.querySelectorAll('[data-aba]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.aba === aba)));
+    el.querySelectorAll('[data-aba]').forEach((b) => b.setAttribute('aria-current', b.dataset.aba === aba ? 'page' : 'false'));
     const p = $('#painel-aba', el);
     montar(p, carregando());
     try {
       if (OPERACIONAIS.includes(aba)) limparAba = await op.montarAba(p, aba, $('#saveflag', el));
+      else if (aba === 'plano') limparAba = await (await import('./plano.js')).render(p, ctx);
+      else if (aba === 'portal') limparAba = await (await import('./portal-cliente.js')).render(p, ctx);
       else limparAba = await ({ visao, autodiagnostico, posicionamento, historico })[aba](p, ctx);
     } catch (e) { avisarErro(e); montar(p, vazio('Não foi possível abrir esta seção', 'Tente novamente.')); }
   }
-  el.querySelectorAll('[data-aba]').forEach((b) => b.addEventListener('click', () => abrir(b.dataset.aba)));
+  el.querySelectorAll('[data-aba]').forEach((b) => b.addEventListener('click', () => { abrir(b.dataset.aba); scrollTo({ top: 0 }); }));
   await abrir(aba);
   return () => { limparAba?.(); };
 }

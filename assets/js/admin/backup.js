@@ -5,7 +5,8 @@ import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, fmtDataHora, baixar } from '../core/dom.js';
 import { avisar, avisarErro, ocupado } from '../core/ui.js';
 
-const TABELAS = ['clients', 'profiles', 'assessments', 'self_assessments', 'operational_diagnoses', 'proposals', 'consents', 'audit_log'];
+const TABELAS = ['clients', 'profiles', 'assessments', 'self_assessments', 'operational_diagnoses', 'proposals', 'consents',
+  'app_settings', 'client_documents', 'action_plans', 'action_plan_views', 'materials', 'material_access', 'audit_log'];
 const ITERACOES = 600000;
 const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
 const deB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));

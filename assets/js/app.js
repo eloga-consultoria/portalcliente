@@ -20,11 +20,17 @@ const ROTAS_ADMIN = {
   importar:  { titulo: 'Importar autodiagnóstico', modulo: () => import('./admin/importar.js') },
   auditoria: { titulo: 'Auditoria', modulo: () => import('./admin/auditoria.js') },
   backup:    { titulo: 'Backup',    modulo: () => import('./admin/backup.js') },
+  materiais: { titulo: 'Materiais', modulo: () => import('./admin/materiais.js') },
+  configuracoes: { titulo: 'Configurações', modulo: () => import('./admin/configuracoes.js') },
   conta:     { titulo: 'Minha conta', modulo: () => import('./admin/conta.js') },
 };
-const MENU_ADMIN = [['painel', 'Clientes'], ['importar', 'Importar'], ['auditoria', 'Auditoria'], ['backup', 'Backup'], ['conta', 'Minha conta']];
+const MENU_ADMIN = [['painel', 'Clientes'], ['importar', 'Importar'], ['materiais', 'Materiais'], ['configuracoes', 'Programas e preços'], ['auditoria', 'Auditoria'], ['backup', 'Backup'], ['conta', 'Minha conta']];
 const ROTAS_CLIENTE = {
   inicio: { titulo: 'Início', modulo: () => import('./client/portal.js') },
+  posicionamento: { titulo: 'Diagnóstico de posicionamento', modulo: () => import('./client/portal.js').then((m) => ({ render: m.renderPosicionamento })), menu: 'inicio' },
+  documento: { titulo: 'Documento', modulo: () => import('./client/documentos.js'), menu: 'inicio' },
+  plano: { titulo: 'Plano de ação', modulo: () => import('./client/plano.js'), menu: 'inicio' },
+  materiais: { titulo: 'Materiais', modulo: () => import('./client/materiais.js'), menu: 'inicio' },
   conta:  { titulo: 'Minha conta', modulo: () => import('./client/conta.js') },
 };
 
@@ -77,7 +83,7 @@ function montarLayout() {
   montar(root, html`
     <a class="skip" href="#conteudo">Pular para o conteúdo</a>
     <header class="topbar no-print"><div class="wrap">
-      <a href="#/${admin ? 'painel' : 'inicio'}" aria-label="Início"><img src="assets/img/eloga-logo.png" alt="ELOGA" class="brandlogo"></a>
+      <a href="#/${admin ? 'painel' : 'inicio'}" aria-label="Início"><img src="assets/img/eloga-marca-clara.png" alt="ELOGA" class="brandlogo"></a>
       <nav aria-label="Menu principal">${menu.map(([r, t]) => html`<a href="#/${r}" data-rota="${r}">${t}</a>`)}</nav>
       <div class="who"><span class="who-name">${admin ? 'Conectada como' : ''} <b>${nome}</b></span>
         <button class="btn sm secondary" type="button" id="btn-sair">Sair</button></div>
@@ -95,6 +101,7 @@ function montarLayout() {
   addEventListener('hashchange', navegar);
   vigiarInatividade(admin ? CONFIG.inatividadeAdmin : CONFIG.inatividadeCliente);
   navegar();
+  if (!admin) import('./client/abertura.js').then((m) => m.abertura()).catch(() => {});
 }
 
 // ------------------------------------------------------------------ fluxo de acesso

@@ -37,16 +37,16 @@ export const CATALOG = {
       kpis:['% de documentos vigentes','Pendências críticas','Vencimentos em 90 dias'] }
   },
   formats: {
-    kit:      { name:'Kit de organização operacional', price:900, unit:'único',
+    kit:      { name:'Kit de organização operacional', price:900, unit:'único', cobranca:'unico',
                 desc:'Estruturação dos registros para gerar indicadores confiáveis em até 3 meses.',
                 items:['Kit de planilhas conforme a frente prioritária','Parametrização com os dados da clínica','Guia de preenchimento e checklist de rotina semanal','Painel simples de acompanhamento','1 encontro de implantação (1h30) e 1 checagem do preenchimento em 30 dias','Suporte com resposta em até 2 dias úteis, por e-mail ou WhatsApp'] },
-    analise:  { name:'Análise pontual', price:1200, unit:'por frente',
+    analise:  { name:'Análise pontual', price:1200, unit:'por frente', cobranca:'por_frente', nota:'abatido do programa se contratado em até 30 dias',
                 desc:'Análise dos dados da frente, relatório e apresentação com recomendações.',
                 items:['Coleta e análise dos dados de no mínimo 3 meses','Relatório com indicadores e linha de base','Apresentação dos resultados e das recomendações','Valor integralmente abatido do programa se contratado em até 30 dias'] },
-    programa: { name:'Programa de acompanhamento', price:null, unit:'mensal',
+    programa: { name:'Programa de acompanhamento', price:null, unit:'mensal', cobranca:'soma_frentes',
                 desc:'Análise, implantação das melhorias e acompanhamento com indicadores, do antes ao depois.',
                 items:['Linha de base dos indicadores da frente','Plano de ação construído em conjunto','Implantação de fluxos, ferramentas, POPs e ITs','Treinamento da equipe','Reuniões em datas fixas com painel de indicadores (implantado, resultado, pendente)','Resposta em até 2 dias úteis entre as reuniões, por e-mail ou WhatsApp','Encerramento com relatório antes/depois, kit da frente e termo de encerramento'] },
-    autonomo: { name:'Programa do profissional autônomo', price:800, unit:'mensal',
+    autonomo: { name:'Programa do profissional autônomo', price:800, unit:'mensal', cobranca:'mensal', frentesFixas:['fat','age','exp','reg'],
                 desc:'Acompanhamento de faturamento, agenda, experiência e regulatório para quem atende sozinho.',
                 items:['Encontros quinzenais com apresentação a partir das planilhas preenchidas','Plano de ação','Kit de independência completo: planilhas de preenchimento e dashboards','Indicadores de margem de contribuição e ticket médio','Painel simples durante o programa e BI completo liberado no encerramento','Resposta em até 2 dias úteis, por e-mail ou WhatsApp'] }
   },
@@ -56,6 +56,8 @@ export const CATALOG = {
   minMonths:3
 };
 export const FRONT_KEYS = ['fat','fin','com','age','exp','reg'];
+export const CATALOGO_PADRAO = JSON.parse(JSON.stringify(CATALOG));
+export const FORMATOS_BASE = ['kit', 'analise', 'programa', 'autonomo']; // usados na recomendação automática da matriz
 
 /* ---------------- roteiro ---------------- */
 export const QA = [
@@ -97,7 +99,7 @@ export const estadoPadrao = () => ({
   version: 2,
   client: { sessionDate: hoje(), profile: 'terapias', payer: 'misto' },
   auto: { overall: '', level: '', leadClass: '', date: '', notes: '', pillars: { fat: '', fin: '', com: '', age: '', exp: '', reg: '' } },
-  session: { fronts: [], A: ['', '', '', '', ''], B: {}, C: [{ v: '', n: '' }, { v: '', n: '' }, { v: '', n: '' }],
+  session: { ctx: contextoPadrao(), fronts: [], A: ['', '', '', '', ''], B: {}, C: [{ v: '', n: '' }, { v: '', n: '' }, { v: '', n: '' }],
     D: { who: '', nochange: '', success: '', team: '', budget: '', decisorPresent: '' }, devolutiva: '', freeNotes: '' },
   matrix: { scores: {}, ovFront: '', ovFormat: '', findings: [{ t: '', i: '' }, { t: '', i: '' }, { t: '', i: '' }], quickwins: ['', '', ''], goal3m: '', exec: '' },
   report: { edits: {} },
@@ -158,14 +160,33 @@ export function situacaoDados(state, ev) {
   return ['nao', 'Organização necessária antes da análise', 'Os registros atuais não permitem extrair 3 meses de dados confiáveis. O primeiro passo é estruturar os controles para gerar indicadores.'];
 }
 
+/** Como cada formato é cobrado: único, por frente, mensal fixo ou soma das mensalidades das frentes. */
+export const COBRANCA_FORMATO = { unico: 'Valor único', por_frente: 'Valor único por frente', mensal: 'Mensal fixo', soma_frentes: 'Mensal: soma das frentes' };
+export const recorrente = (f) => ['mensal', 'soma_frentes'].includes(f?.cobranca);
+export const usaFrentes = (f) => !!f && !f.frentesFixas && ['unico', 'por_frente', 'soma_frentes'].includes(f.cobranca);
+
 export function precoOpcao(o) {
-  const F = CATALOG.formats, fr = CATALOG.fronts;
-  const p = (k) => (o.prices[k] != null && o.prices[k] !== '' ? +o.prices[k] : null);
-  if (o.type === 'kit') return { once: p('kit') ?? F.kit.price, monthly: 0, months: 0 };
-  if (o.type === 'analise') return { once: o.fronts.reduce((s, k) => s + (p('an_' + k) ?? F.analise.price), 0), monthly: 0, months: 0 };
-  if (o.type === 'autonomo') return { once: o.system ? (p('sys') ?? CATALOG.system.price) : 0, monthly: p('auto') ?? F.autonomo.price, months: Math.max(CATALOG.minMonths, +o.months || 3) };
-  if (o.type === 'programa') return { once: o.system ? (p('sys') ?? CATALOG.system.price) : 0, monthly: o.fronts.reduce((s, k) => s + (p('pr_' + k) ?? fr[k].monthly), 0), months: Math.max(CATALOG.minMonths, +o.months || 3) };
-  return { once: 0, monthly: 0, months: 0 };
+  const f = CATALOG.formats[o.type], fr = CATALOG.fronts;
+  if (!f) return { once: 0, monthly: 0, months: 0 };
+  const p = (...ks) => { for (const k of ks) if (o.prices[k] != null && o.prices[k] !== '') return +o.prices[k]; return null; };
+  const meses = Math.max(CATALOG.minMonths, +o.months || CATALOG.minMonths);
+  const sistema = o.system ? (p('sys') ?? CATALOG.system.price) : 0;
+  switch (f.cobranca) {
+    case 'unico': return { once: p('valor', 'kit') ?? +f.price ?? 0, monthly: 0, months: 0 };
+    case 'por_frente': return { once: o.fronts.reduce((s, k) => s + (p('fr_' + k, 'an_' + k) ?? +f.price), 0), monthly: 0, months: 0 };
+    case 'mensal': return { once: sistema, monthly: p('mensal', 'auto') ?? +f.price, months: meses };
+    case 'soma_frentes': return { once: sistema, monthly: o.fronts.reduce((s, k) => s + (p('pr_' + k) ?? +(fr[k]?.monthly || 0)), 0), months: meses };
+    default: return { once: 0, monthly: 0, months: 0 };
+  }
+}
+
+/** Aplica o catálogo salvo pela administradora (Configurações) sobre o padrão. */
+export function aplicarCatalogo(salvo) {
+  if (!salvo || typeof salvo !== 'object') return;
+  if (salvo.fronts) for (const k of Object.keys(CATALOG.fronts)) if (salvo.fronts[k]) Object.assign(CATALOG.fronts[k], salvo.fronts[k]);
+  if (salvo.formats) { for (const k of Object.keys(CATALOG.formats)) if (!salvo.formats[k]) delete CATALOG.formats[k]; Object.assign(CATALOG.formats, salvo.formats); }
+  if (salvo.system) Object.assign(CATALOG.system, salvo.system);
+  if (salvo.minMonths) CATALOG.minMonths = +salvo.minMonths;
 }
 
 /** Sugere as opções da proposta a partir do formato recomendado (só se ainda não montadas). */
@@ -180,3 +201,73 @@ export function semearOpcoes(state) {
 }
 
 export function somarDias(d, n) { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + (+n || 0)); return x.toISOString().slice(0, 10); }
+
+// =====================================================================
+// CONTEXTO RÁPIDO DA OPERAÇÃO + CAPACIDADE
+// =====================================================================
+export const DIAS = [['seg', 'Segunda'], ['ter', 'Terça'], ['qua', 'Quarta'], ['qui', 'Quinta'], ['sex', 'Sexta'], ['sab', 'Sábado'], ['dom', 'Domingo']];
+export const ESPECIALIDADES = ['ABA', 'Fonoaudiologia', 'Terapia ocupacional', 'Psicologia', 'Psicopedagogia', 'Fisioterapia', 'Nutrição', 'Musicoterapia', 'Neuropsicologia', 'Medicina', 'Estética'];
+export const COBRANCAS = ['Sessão avulsa', 'Pacote de sessões', 'Mensalidade', 'Convênio', 'Liminar', 'Reembolso'];
+export const SISTEMAS = [['agenda', 'Agenda'], ['prontuario', 'Prontuário'], ['crm', 'CRM / atendimento'], ['faturamento', 'Faturamento']];
+export const NIVEL_SISTEMA = [['nenhum', 'Nenhum'], ['planilha', 'Planilha'], ['sistema', 'Sistema']];
+
+const dia = (aberto) => ({ aberto, ini: '08:00', fim: '18:00', intIni: '12:00', intFim: '13:00' });
+export const contextoPadrao = () => ({
+  dias: { seg: dia(true), ter: dia(true), qua: dia(true), qui: dia(true), sex: dia(true), sab: dia(false), dom: dia(false) },
+  duracao: 50, modalidade: 'individual', simultaneos: 1, salas: '', profissionais: '', administrativos: '',
+  especialidades: [], especialidadesOutras: '', atendimentosMes: '',
+  mix: { convenio: '', particular: '', liminar: '' },
+  sistemas: { agenda: '', prontuario: '', crm: '', faturamento: '' },
+  cobranca: [], valorSessao: '', pacoteSessoes: '', pacoteValor: '', mensalidade: '', observacoes: '',
+});
+
+const minutos = (h) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(h || '')); return m ? +m[1] * 60 + +m[2] : null; };
+
+/** Minutos em que a clínica atende no dia (desconta o intervalo de fechamento). */
+export function minutosDeAtendimento(d) {
+  if (!d?.aberto) return 0;
+  const a = minutos(d.ini), b = minutos(d.fim);
+  if (a === null || b === null || b <= a) return 0;
+  let total = b - a;
+  const ia = minutos(d.intIni), ib = minutos(d.intFim);
+  if (ia !== null && ib !== null && ib > ia) total -= Math.max(0, Math.min(b, ib) - Math.max(a, ia));
+  return Math.max(0, total);
+}
+
+export const SEMANAS_POR_MES = 52 / 12;
+
+/**
+ * Capacidade de atendimentos.
+ * Por horário = menor número entre salas e profissionais × pacientes simultâneos por sala
+ * (cada profissional ocupa uma sala por vez). Horários por dia = minutos de atendimento ÷ duração.
+ */
+export function capacidade(ctx) {
+  const salas = Math.max(0, Math.floor(+ctx?.salas || 0));
+  const prof = Math.max(0, Math.floor(+ctx?.profissionais || 0));
+  const simult = Math.max(1, Math.floor(+ctx?.simultaneos || 1));
+  const dur = Math.max(0, +ctx?.duracao || 0);
+  if (!salas || !prof || !dur) return null;
+  const frentes = Math.min(salas, prof);
+  const porHorario = frentes * simult;
+  const porDia = DIAS.map(([k, nome]) => {
+    const min = minutosDeAtendimento(ctx.dias?.[k]);
+    const horarios = Math.floor(min / dur);
+    return { k, nome, aberto: !!ctx.dias?.[k]?.aberto, minutos: min, horarios, atendimentos: horarios * porHorario };
+  });
+  const semanal = porDia.reduce((s, d) => s + d.atendimentos, 0);
+  const mensal = Math.round(semanal * SEMANAS_POR_MES);
+  const gargalo = salas < prof ? 'salas' : prof < salas ? 'profissionais' : 'equilibrado';
+  // Quanto cresce eliminando o gargalo (+1 sala ou +1 profissional)
+  const novoFrentes = gargalo === 'equilibrado' ? frentes : Math.min(gargalo === 'salas' ? salas + 1 : salas, gargalo === 'profissionais' ? prof + 1 : prof);
+  const mensalSemGargalo = Math.round(semanal / frentes * novoFrentes * SEMANAS_POR_MES);
+  const realizados = +ctx.atendimentosMes || 0;
+  const ticket = +ctx.valorSessao || ((+ctx.pacoteValor && +ctx.pacoteSessoes) ? +ctx.pacoteValor / +ctx.pacoteSessoes : 0);
+  return {
+    salas, profissionais: prof, simultaneos: simult, duracao: dur, porHorario, porDia, semanal, mensal,
+    diasAbertos: porDia.filter((d) => d.aberto && d.horarios > 0).length,
+    gargalo, ociosos: Math.abs(salas - prof), ganhoMensal: mensalSemGargalo - mensal,
+    ocupacao: realizados && mensal ? Math.round(realizados / mensal * 100) : null,
+    ticket: ticket || null, receitaPotencial: ticket ? Math.round(mensal * ticket) : null,
+    receitaOciosa: ticket && realizados ? Math.round(Math.max(0, mensal - realizados) * ticket) : null,
+  };
+}

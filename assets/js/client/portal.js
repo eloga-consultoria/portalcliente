@@ -11,13 +11,47 @@ import { aoSairDaTela } from '../app.js';
 const LISTA_SECOES = Object.keys(SECOES);
 let limparAtual = null;
 
+function expirado(c) { return !c.is_active || (c.access_expires_at && new Date(c.access_expires_at) <= new Date()); }
+
+// ------------------------------------------------------------------ INÍCIO (painel do cliente)
 export async function render(el, _params, sessao) {
   const cliente = await q(db.from('clients').select('*').eq('id', sessao.perfil.client_id).single());
   sessao.cliente = cliente;
-  const expirado = !cliente.is_active || (cliente.access_expires_at && new Date(cliente.access_expires_at) <= new Date());
-  if (expirado) return telaEncerrado(el, cliente);
-  if (!cliente.positioning_enabled) return telaSemAtividade(el, cliente);
+  if (expirado(cliente)) return telaEncerrado(el, cliente);
+  const [avals, docs, mats] = await Promise.all([
+    cliente.positioning_enabled ? q(db.from('assessments').select('status, progress_percent, submitted_at').eq('client_id', cliente.id).order('created_at', { ascending: false }).limit(1)) : [],
+    q(db.from('client_documents').select('tipo, titulo, publicado_em').eq('client_id', cliente.id)),
+    q(db.from('material_access').select('material_id')),
+  ]);
+  const lib = cliente.liberacoes || {};
+  const aval = avals[0];
+  const cartoes = [];
+  if (cliente.positioning_enabled) cartoes.push({ rota: '#/posicionamento', rotulo: 'Diagnóstico de posicionamento',
+    texto: !aval ? 'Ficha liberada para você preencher.' : aval.status === 'draft' ? `Em preenchimento · ${aval.progress_percent || 0}%` : 'Enviado em ' + fmtData(aval.submitted_at),
+    acao: !aval ? 'Começar' : aval.status === 'draft' ? 'Continuar' : 'Ver', destaque: !aval || aval.status === 'draft' });
+  if (lib.plano) cartoes.push({ rota: '#/plano/plano', rotulo: 'Plano de ação', texto: 'Acompanhe as entregas, os responsáveis e os prazos do projeto.', acao: 'Abrir' });
+  if (lib.dashboard) cartoes.push({ rota: '#/plano/dashboard', rotulo: 'Indicadores do projeto', texto: 'Andamento das ações em gráficos e números.', acao: 'Abrir' });
+  for (const d of docs) cartoes.push({ rota: '#/documento/' + d.tipo, rotulo: d.tipo === 'relatorio' ? 'Relatório de diagnóstico' : 'Proposta', texto: d.titulo + ' · publicado em ' + fmtData(d.publicado_em), acao: 'Ler' });
+  if (mats.length) cartoes.push({ rota: '#/materiais', rotulo: 'Materiais exclusivos', texto: mats.length + (mats.length === 1 ? ' material disponível' : ' materiais disponíveis') + ' para a sua clínica.', acao: 'Ver materiais' });
 
+  montar(el, html`<div class="wrap stack">
+    <section class="hero-client"><span class="eyebrow" style="color:var(--lime)">Portal ELOGA</span>
+      <h1>Olá, ${cliente.name}.</h1>
+      <p class="serif" style="font-size:var(--t-xl);color:#dfe8ed">Você decide transformar. Nós construímos juntos. Seu resultado é o nosso.</p></section>
+    ${cartoes.length ? html`<div class="grid g3">${cartoes.map((k) => html`<a class="card cartao-portal ${k.destaque ? 'destaque' : ''}" href="${k.rota}">
+        <h3>${k.rotulo}</h3><p class="small muted">${k.texto}</p><span class="btn sm ${k.destaque ? 'primary' : 'secondary'}">${k.acao}</span></a>`)}</div>`
+      : html`<div class="card"><h2>Nenhuma etapa disponível no momento</h2><p class="muted">Quando a ELOGA liberar documentos, o plano de ação ou materiais, eles aparecerão aqui.</p>${contatoHtml()}</div>`}
+    <div class="card"><h3>Seu espaço seguro</h3><div class="seguranca" style="margin-top:12px">
+      <div><span class="ic" aria-hidden="true">1</span><span><b>Acesso individual</b>Somente a sua clínica vê estas informações.</span></div>
+      <div><span class="ic" aria-hidden="true">2</span><span><b>Dados protegidos</b>Conexão criptografada e regras de acesso no servidor.</span></div>
+      <div><span class="ic" aria-hidden="true">3</span><span><b>LGPD</b>Sem dados de pacientes. Você pode pedir a exclusão a qualquer momento.</span></div></div></div></div>`);
+}
+
+// ------------------------------------------------------------------ POSICIONAMENTO
+export async function renderPosicionamento(el, _params, sessao) {
+  const cliente = await q(db.from('clients').select('*').eq('id', sessao.perfil.client_id).single());
+  if (expirado(cliente)) return telaEncerrado(el, cliente);
+  if (!cliente.positioning_enabled) return telaSemAtividade(el, cliente);
   const lista = await q(db.from('assessments').select('*').eq('client_id', cliente.id).order('created_at', { ascending: false }).limit(1));
   const aval = lista[0] || null;
   if (aval && aval.status !== 'draft') return telaObrigado(el, cliente, aval);
@@ -74,11 +108,7 @@ function telaBoasVindas(el, c, aval) {
       </div>
       <div style="margin-top:24px;position:relative;z-index:1"><button class="btn primary lg" type="button" id="comecar">${aval ? 'Continuar de onde parei' : 'Começar'}</button></div>
     </section>
-    <div class="grid g3">
-      <div class="card tight"><h3>Confidencial</h3><p class="small muted" style="margin:0">Somente a ELOGA tem acesso às suas respostas.</p></div>
-      <div class="card tight"><h3>Sem dados de pacientes</h3><p class="small muted" style="margin:0">Responda sobre a clínica. Não informe nomes ou dados de pacientes.</p></div>
-      <div class="card tight"><h3>Funciona no celular</h3><p class="small muted" style="margin:0">Para textos mais longos, o computador é mais confortável.</p></div>
-    </div></div>`);
+    <a href="#/inicio" class="small">← Voltar ao início</a></div>`);
   $('#comecar', el).addEventListener('click', () => { limparAtual = questionario(el, c, aval); }, { once: true });
 }
 
@@ -131,6 +161,7 @@ function questionario(el, cliente, avalInicial) {
     const b = $('#prog-bar', el); if (b) b.style.width = p + '%';
     const t = $('#prog-txt', el); if (t) t.textContent = p + '% preenchido';
     $$('.stepper button', el).forEach((btn, i) => {
+      if (i >= LISTA_SECOES.length) return;
       const ok = PERGUNTAS.filter((x) => x.section === LISTA_SECOES[i]).every((x) => respondida(x, estado.answers[x.id]));
       btn.classList.toggle('done', ok);
     });

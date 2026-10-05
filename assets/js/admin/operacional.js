@@ -4,8 +4,11 @@
 import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, $$, debounce, fmtData, fmtDataHora, imprimirDocumento, nomeArquivo } from '../core/dom.js';
 import { avisar, avisarErro, confirmar, ocupado } from '../core/ui.js';
-import { CATALOG, FRONT_KEYS, QA, QB, QC, QD, CRIT, PH, estadoPadrao, mesclar, num, candidatas, sc, avaliar, semearOpcoes, somarDias } from './operacional-modelo.js';
-import { relatorioHtml, propostaHtml } from '../reports/documentos-operacionais.js';
+import { CATALOG, FRONT_KEYS, QB, QC, QD, CRIT, PH, estadoPadrao, mesclar, num, candidatas, sc, avaliar, semearOpcoes, somarDias,
+  DIAS, ESPECIALIDADES, COBRANCAS, SISTEMAS, NIVEL_SISTEMA, capacidade, recorrente, usaFrentes } from './operacional-modelo.js';
+import { carregarCatalogo } from './catalogo.js';
+import { brl } from '../core/dom.js';
+import { relatorioHtml, propostaHtml, SECOES_RELATORIO, secaoAtiva } from '../reports/documentos-operacionais.js';
 
 const ETAPAS = ['lead', 'autodiagnostico', 'diagnostico_operacional', 'relatorio_emitido', 'proposta_emitida', 'cliente_ativo'];
 
@@ -36,6 +39,7 @@ async function subirEtapa(cliente, etapa) {
 }
 
 export async function criarOperacional({ cliente, autodiag, logo }) {
+  await carregarCatalogo();
   const lista = await q(db.from('operational_diagnoses').select('*').eq('client_id', cliente.id).order('updated_at', { ascending: false }).limit(1));
   let registro = lista[0] || null;
   let state = mesclar(estadoPadrao(), registro?.data || {});
@@ -96,6 +100,61 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
 
   // ------------------------------------------------------------ SESSÃO
   let cron = { inicio: null, acumulado: 0, int: null };
+  // ------------------------------------------------------------ A · CONTEXTO (preenchimento rápido)
+  const chip = (caminho, valor, rotulo) => { const on = (get(caminho) || []).includes(valor);
+    return html`<button type="button" class="chip ${on ? 'on' : ''}" data-lista="${caminho}" data-v="${valor}" aria-pressed="${on}">${rotulo || valor}</button>`; };
+  const numero = (caminho, rotulo, extra = '') => html`<div class="field"><label>${rotulo}</label><input type="number" min="0" inputmode="numeric" data-k="${caminho}" data-num data-ctx value="${get(caminho) ?? ''}" ${extra}></div>`;
+
+  function caixaCapacidade() {
+    const c = capacidade(state.session.ctx);
+    if (!c) return html`<div class="notice info">Informe duração, salas e profissionais para calcular a capacidade.</div>`;
+    const n = (v) => Number(v).toLocaleString('pt-BR');
+    return html`<div class="grid g4">
+      <div class="kpi accent"><div class="k-label">Por horário</div><div class="k-value">${n(c.porHorario)}</div><div class="k-note" style="color:#a9bcc6">menor entre ${c.salas} sala(s) e ${c.profissionais} profissional(is) × ${c.simultaneos}</div></div>
+      <div class="kpi"><div class="k-label">Por semana</div><div class="k-value">${n(c.semanal)}</div><div class="k-note">${c.diasAbertos} dia(s) de atendimento</div></div>
+      <div class="kpi"><div class="k-label">Por mês</div><div class="k-value">${n(c.mensal)}</div><div class="k-note">média de 4,33 semanas</div></div>
+      <div class="kpi"><div class="k-label">Ocupação atual</div><div class="k-value">${c.ocupacao === null ? '—' : c.ocupacao + '%'}</div><div class="k-note">${c.ocupacao === null ? 'informe os atendimentos/mês' : 'realizados ÷ capacidade'}</div></div></div>
+      <p class="small" style="margin:10px 0 0"><b>Gargalo:</b> ${c.gargalo === 'equilibrado' ? 'salas e profissionais equilibrados.' : c.gargalo === 'salas' ? `salas (${c.ociosos} profissional(is) sem sala no mesmo horário). Com +1 sala: +${n(c.ganhoMensal)} atendimentos/mês.` : `profissionais (${c.ociosos} sala(s) ociosa(s) por horário). Com +1 profissional: +${n(c.ganhoMensal)} atendimentos/mês.`}
+      ${c.receitaPotencial ? html` · <b>Receita potencial:</b> ${brl(c.receitaPotencial)}/mês${c.receitaOciosa ? html` · <b>Capacidade ociosa:</b> ${brl(c.receitaOciosa)}/mês` : ''}` : ''}</p>`;
+  }
+
+  function contexto() {
+    const x = state.session.ctx;
+    return html`<div class="card"><div class="card-head"><div><h3>A · Contexto da operação</h3><p>Toque nas opções; digite só números.</p></div></div>
+      <h4 class="label" style="margin:4px 0 8px">Funcionamento</h4>
+      <div class="table-wrap"><table class="t"><thead><tr><th>Dia</th><th>Abre</th><th>Fecha</th><th>Intervalo (início)</th><th>Intervalo (fim)</th></tr></thead><tbody>
+        ${DIAS.map(([k, nome]) => { const d = x.dias[k]; return html`<tr>
+          <td><label class="check"><input type="checkbox" data-chk="session.ctx.dias.${k}.aberto" ${d.aberto ? html`checked` : ''}> ${nome}</label></td>
+          ${['ini', 'fim', 'intIni', 'intFim'].map((f) => html`<td><input type="time" step="300" data-k="session.ctx.dias.${k}.${f}" data-ctx value="${d[f]}" ${d.aberto ? '' : html`disabled`} aria-label="${nome} ${f}"></td>`)}</tr>`; })}
+      </tbody></table></div>
+      <div class="toolbar" style="margin:8px 0 18px"><button type="button" class="btn sm secondary" data-acao="copiar-dias">Copiar segunda para terça a sexta</button>
+        <span class="xs muted">Deixe o intervalo em branco se a clínica não fecha.</span></div>
+      <div class="grid g4">
+        ${numero('session.ctx.duracao', 'Duração do atendimento (min)')}
+        <div class="field"><label>Formato</label>${seg('session.ctx.modalidade', [['individual', 'Individual'], ['grupo', 'Em grupo'], ['misto', 'Misto']])}</div>
+        ${numero('session.ctx.simultaneos', 'Pacientes por sala no mesmo horário', 'min="1"')}
+        ${numero('session.ctx.salas', 'Salas de atendimento')}
+        ${numero('session.ctx.profissionais', 'Profissionais de atendimento')}
+        ${numero('session.ctx.administrativos', 'Equipe administrativa')}
+        ${numero('session.ctx.atendimentosMes', 'Atendimentos realizados/mês')}
+      </div>
+      <div id="caixa-capacidade" style="margin:16px 0 20px">${caixaCapacidade()}</div>
+      <h4 class="label" style="margin:0 0 8px">Especialidades</h4>
+      <div class="chips">${ESPECIALIDADES.map((e) => chip('session.ctx.especialidades', e))}</div>
+      <input type="text" style="margin-top:8px" data-k="session.ctx.especialidadesOutras" value="${x.especialidadesOutras}" placeholder="Outras especialidades">
+      <h4 class="label" style="margin:18px 0 8px">Fonte de receita (% aproximado)</h4>
+      <div class="grid g3">${numero('session.ctx.mix.convenio', 'Convênio %')}${numero('session.ctx.mix.particular', 'Particular %')}${numero('session.ctx.mix.liminar', 'Liminar %')}</div>
+      <h4 class="label" style="margin:18px 0 8px">Modelos de cobrança</h4>
+      <div class="chips">${COBRANCAS.map((e) => chip('session.ctx.cobranca', e))}</div>
+      <div class="grid g4" style="margin-top:12px">
+        ${numero('session.ctx.valorSessao', 'Valor da sessão avulsa (R$)')}${numero('session.ctx.pacoteSessoes', 'Sessões no pacote')}
+        ${numero('session.ctx.pacoteValor', 'Valor do pacote (R$)')}${numero('session.ctx.mensalidade', 'Mensalidade (R$)')}</div>
+      <h4 class="label" style="margin:18px 0 8px">Sistemas</h4>
+      <div class="grid g4">${SISTEMAS.map(([k, r]) => html`<div class="field"><label>${r}</label>${seg('session.ctx.sistemas.' + k, NIVEL_SISTEMA)}</div>`)}</div>
+      <div class="field" style="margin-top:16px"><label>Observações de contexto</label><textarea rows="2" data-k="session.ctx.observacoes">${x.observacoes}</textarea></div>
+    </div>`;
+  }
+
   function sessao() {
     return html`<div class="stack">
       <div class="card tight no-print"><div class="row between"><div class="row"><span class="clock" id="clock">00:00</span>
@@ -104,7 +163,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         <div class="timeline" style="margin-top:12px">${[['0–5 min', 'Abertura'], ['5–12 min', 'A · Contexto'], ['12–30 min', 'B · Dor e impacto'], ['30–37 min', 'C · Dados'], ['37–43 min', 'D · Decisão'], ['43–45 min', 'Encerramento']].map(([t, n], i) => html`<div class="tl" data-fase="${i}"><b>${t}</b><span>${n}</span></div>`)}</div></div>
       <div class="card"><h3>Abertura</h3><div class="notice">“O objetivo de hoje é entender a sua operação a partir do autodiagnóstico. Em até 48 horas apresento o relatório de diagnóstico e o caminho recomendado.”</div>
         ${state.auto.notes ? html`<p class="small muted" style="margin-top:12px;white-space:pre-line"><b>Da ficha:</b> ${state.auto.notes}</p>` : ''}</div>
-      <div class="card"><h3>A · Contexto <span class="badge purple">todos os perfis</span></h3>${QA.map((p, i) => campoTexto(i + 1, p, `session.A.${i}`))}</div>
+      ${contexto()}
       <div class="card"><h3>B · Dor e impacto <span class="badge purple">frentes candidatas</span></h3>
         <p class="small muted">Selecione as frentes exploradas (sugestão: as 2 menores notas do autodiagnóstico, em roxo).</p>
         <div class="chips" style="margin-bottom:10px">${FRONT_KEYS.map((k) => html`<button type="button" class="chip ${state.session.fronts.includes(k) ? 'on' : ''}" data-frente="${k}" aria-pressed="${state.session.fronts.includes(k)}" style="${candidatas(state).includes(k) && !state.session.fronts.includes(k) ? 'border-color:var(--purple);color:var(--purple)' : ''}">${CATALOG.fronts[k].name}${num(state.auto.pillars[k]) !== null ? ' · ' + state.auto.pillars[k] : ''}</button>`)}</div>
@@ -164,7 +223,10 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
   // ------------------------------------------------------------ RELATÓRIO
   function relatorio() {
     return html`<div class="area-doc">
-      <div class="toolbar no-print" style="margin-bottom:12px"><span class="small muted" style="margin-right:auto">Textos com contorno ao passar o mouse podem ser editados direto no relatório.
+      <div class="card tight no-print" style="margin-bottom:12px"><div class="card-head" style="margin-bottom:8px"><div><h3 style="margin:0">Seções do relatório</h3>
+        <p>Desmarque o que não deve entrar no PDF. Os textos com contorno podem ser editados direto no documento.</p></div></div>
+        <div class="chips">${SECOES_RELATORIO.map(([id, nome]) => html`<label class="chip"><input type="checkbox" data-secao="${id}" ${secaoAtiva(state, id) ? html`checked` : ''}>${nome}</label>`)}</div></div>
+      <div class="toolbar no-print" style="margin-bottom:12px"><span class="small muted" style="margin-right:auto">Confira o documento antes de gerar o PDF.
         ${registro?.report_issued_at ? html`<br>Último PDF gerado em ${fmtDataHora(registro.report_issued_at)}.` : ''}</span>
         <button class="btn secondary" type="button" data-acao="atualizar-doc">Atualizar com os dados</button>
         <button class="btn purple" type="button" data-acao="pdf-relatorio">Gerar PDF do relatório</button></div>
@@ -178,18 +240,18 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
   function editorOpcoes() {
     const F = CATALOG.formats;
     return state.proposal.options.map((o, i) => {
-      const comFrentes = ['programa', 'analise', 'kit'].includes(o.type), recorrente = ['programa', 'autonomo'].includes(o.type);
+      const f = F[o.type], comFrentes = usaFrentes(f), rec = recorrente(f);
       let precos = '';
-      if (o.type === 'kit') precos = html`<div class="field"><label>Valor do kit (R$)</label><input type="number" min="0" data-preco="${i}|kit" value="${o.prices.kit ?? F.kit.price}"></div>`;
-      if (o.type === 'autonomo') precos = html`<div class="field"><label>Valor mensal (R$)</label><input type="number" min="0" data-preco="${i}|auto" value="${o.prices.auto ?? F.autonomo.price}"></div>`;
-      if (o.type === 'analise') precos = o.fronts.map((k) => html`<div class="field"><label>Análise · ${CATALOG.fronts[k].name} (R$)</label><input type="number" min="0" data-preco="${i}|an_${k}" value="${o.prices['an_' + k] ?? F.analise.price}"></div>`);
-      if (o.type === 'programa') precos = o.fronts.map((k) => html`<div class="field"><label>${CATALOG.fronts[k].name} · mensal (R$)</label><input type="number" min="0" data-preco="${i}|pr_${k}" value="${o.prices['pr_' + k] ?? CATALOG.fronts[k].monthly}">${CATALOG.fronts[k].monthlyNote ? html`<span class="hint">${CATALOG.fronts[k].monthlyNote}</span>` : ''}</div>`);
+      if (f?.cobranca === 'unico') precos = html`<div class="field"><label>Valor (R$)</label><input type="number" min="0" data-preco="${i}|valor" value="${o.prices.valor ?? o.prices.kit ?? f.price ?? ''}"></div>`;
+      if (f?.cobranca === 'mensal') precos = html`<div class="field"><label>Valor mensal (R$)</label><input type="number" min="0" data-preco="${i}|mensal" value="${o.prices.mensal ?? o.prices.auto ?? f.price ?? ''}"></div>`;
+      if (f?.cobranca === 'por_frente') precos = o.fronts.map((k) => html`<div class="field"><label>${f.name} · ${CATALOG.fronts[k].name} (R$)</label><input type="number" min="0" data-preco="${i}|fr_${k}" value="${o.prices['fr_' + k] ?? o.prices['an_' + k] ?? f.price ?? ''}"></div>`);
+      if (f?.cobranca === 'soma_frentes') precos = o.fronts.map((k) => html`<div class="field"><label>${CATALOG.fronts[k].name} · mensal (R$)</label><input type="number" min="0" data-preco="${i}|pr_${k}" value="${o.prices['pr_' + k] ?? CATALOG.fronts[k].monthly}">${CATALOG.fronts[k].monthlyNote ? html`<span class="hint">${CATALOG.fronts[k].monthlyNote}</span>` : ''}</div>`);
       return html`<div class="opt-editor"><h4 style="margin:0 0 10px">Opção ${i + 1}</h4>
-        <div class="grid g2"><div class="field"><label>Formato</label><select data-op-tipo="${i}"><option value="">— sem opção —</option>${Object.entries(F).map(([k, v]) => html`<option value="${k}" ${o.type === k ? html`selected` : ''}>${v.name}</option>`)}</select></div>
-        ${recorrente ? html`<div class="field"><label>Duração (meses, mínimo ${CATALOG.minMonths})</label><input type="number" min="${CATALOG.minMonths}" data-op-meses="${i}" value="${o.months}"></div>` : html`<div></div>`}</div>
+        <div class="grid g2"><div class="field"><label>Programa</label><select data-op-tipo="${i}"><option value="">— sem opção —</option>${Object.entries(F).map(([k, v]) => html`<option value="${k}" ${o.type === k ? html`selected` : ''}>${v.name}</option>`)}</select></div>
+        ${rec ? html`<div class="field"><label>Duração (meses, mínimo ${CATALOG.minMonths})</label><input type="number" min="${CATALOG.minMonths}" data-op-meses="${i}" value="${o.months}"></div>` : html`<div></div>`}</div>
         ${comFrentes ? html`<p class="label" style="margin:10px 0 6px">Frentes</p><div class="chips">${FRONT_KEYS.map((k) => html`<button type="button" class="chip ${o.fronts.includes(k) ? 'on' : ''}" data-op-frente="${i}|${k}" aria-pressed="${o.fronts.includes(k)}">${CATALOG.fronts[k].name}</button>`)}</div>` : ''}
         <div class="grid g2" style="margin-top:10px">${precos}</div>
-        <div class="row" style="margin-top:10px">${recorrente ? html`<label class="check"><input type="checkbox" data-op-sistema="${i}" ${o.system ? html`checked` : ''}> Incluir implantação de sistema (R$ ${CATALOG.system.price.toLocaleString('pt-BR')})</label>` : ''}
+        <div class="row" style="margin-top:10px">${rec ? html`<label class="check"><input type="checkbox" data-op-sistema="${i}" ${o.system ? html`checked` : ''}> Incluir ${CATALOG.system.name.toLowerCase()} (${brl(CATALOG.system.price)})</label>` : ''}
           <label class="check"><input type="radio" name="op-rec" data-op-rec="${i}" ${o.recommended ? html`checked` : ''}> Opção recomendada</label></div></div>`;
     });
   }
@@ -237,7 +299,8 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
 
     el.addEventListener('input', (e) => {
       const t = e.target;
-      if (t.dataset.k) { set(t.dataset.k, t.hasAttribute('data-num') ? (t.value === '' ? '' : +t.value) : t.value); mudou();
+      if (t.dataset.k && t.type !== 'checkbox') { set(t.dataset.k, t.hasAttribute('data-num') ? (t.value === '' ? '' : +t.value) : t.value); mudou();
+        if (t.hasAttribute('data-ctx')) { const cx = $('#caixa-capacidade', el); if (cx) montar(cx, caixaCapacidade()); }
         if (aba === 'preparacao' && /auto\.pillars/.test(t.dataset.k)) { /* candidatas mudam: redesenha ao sair do campo */ } }
       if (t.dataset.ed) { state.report.edits[t.dataset.ed] = t.innerText; mudou(); }
       if (t.dataset.preco) { const [i, k] = t.dataset.preco.split('|'); state.proposal.options[+i].prices[k] = t.value; mudou(); }
@@ -245,11 +308,13 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
     }, o);
     el.addEventListener('change', async (e) => {
       const t = e.target;
+      if (t.dataset.chk) { set(t.dataset.chk, t.checked); mudou(); redesenhar(); return; }
+      if (t.dataset.secao) { state.report.secoes = { ...(state.report.secoes || {}), [t.dataset.secao]: t.checked }; mudou(); redesenhar(); return; }
       if (t.dataset.k && (t.tagName === 'SELECT' || /auto\.pillars/.test(t.dataset.k))) redesenhar();
       if (t.dataset.preco || t.dataset.opMeses) redesenhar();
       if (t.dataset.opTipo) {
         const op = state.proposal.options[+t.dataset.opTipo]; op.type = t.value;
-        const ev = avaliar(state); if (!op.fronts.length && ev.front && t.value !== 'autonomo') op.fronts = [ev.front];
+        const ev = avaliar(state); if (!op.fronts.length && ev.front && usaFrentes(CATALOG.formats[t.value])) op.fronts = [ev.front];
         mudou(); redesenhar();
       }
       if (t.dataset.opSistema) { state.proposal.options[+t.dataset.opSistema].system = t.checked; mudou(); redesenhar(); }
@@ -268,6 +333,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
     el.addEventListener('click', async (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.seg) { const atual = get(b.dataset.seg); set(b.dataset.seg, atual === b.dataset.v ? '' : b.dataset.v); mudou(); redesenhar(); return; }
+      if (b.dataset.lista) { const a = get(b.dataset.lista) || []; const i = a.indexOf(b.dataset.v); i > -1 ? a.splice(i, 1) : a.push(b.dataset.v); set(b.dataset.lista, a); mudou(); b.classList.toggle('on', i < 0); b.setAttribute('aria-pressed', String(i < 0)); return; }
       if (b.dataset.frente) { const a = state.session.fronts, k = b.dataset.frente, i = a.indexOf(k); i > -1 ? a.splice(i, 1) : a.push(k); mudou(); redesenhar(); return; }
       if (b.dataset.nota) { const [k, c, nn] = b.dataset.nota.split('|'); const s = sc(state, k); s[c] = s[c] === +nn ? null : +nn; mudou(); redesenhar(); return; }
       if (b.dataset.removerAchado) { state.matrix.findings.splice(+b.dataset.removerAchado, 1); mudou(); redesenhar(); return; }
@@ -283,6 +349,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
           else { cron.inicio = Date.now(); cron.int = setInterval(() => tick(el), 500); }
           b.textContent = cron.inicio ? 'Pausar' : 'Retomar'; tick(el); break;
         case 'cron-zerar': cron.inicio = null; cron.acumulado = 0; clearInterval(cron.int); redesenhar(); break;
+        case 'copiar-dias': { const d = state.session.ctx.dias; ['ter', 'qua', 'qui', 'sex'].forEach((k) => { d[k] = { ...d.seg }; }); mudou(); redesenhar(); avisar('Horário de segunda copiado para terça a sexta.'); break; }
         case 'mais-achado': if (state.matrix.findings.length < 5) { state.matrix.findings.push({ t: '', i: '' }); mudou(); redesenhar(); } break;
         case 'atualizar-doc': redesenhar(); avisar('Documento atualizado.'); break;
         case 'pdf-relatorio': await ocupado(b, gerarRelatorio); break;
