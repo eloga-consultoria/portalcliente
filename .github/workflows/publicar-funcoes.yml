@@ -33,3 +33,4 @@ jobs:
         run: |
           supabase functions deploy admin-clientes --project-ref "$REF"
           supabase functions deploy enviar-posicionamento --project-ref "$REF"
+          supabase functions deploy planilha-drive --project-ref "$REF"

@@ -6,3 +6,6 @@ verify_jwt = true
 
 [functions.enviar-posicionamento]
 verify_jwt = true
+
+[functions.planilha-drive]
+verify_jwt = true
