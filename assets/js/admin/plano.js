@@ -33,7 +33,8 @@ export function montarPainel(caixa, { dados, modo = 'admin', so = '', ir = '', e
     if (e.source !== iframe.contentWindow || !e.data || e.data.ponte !== 'eloga') return;
     if (e.data.tipo === 'pronto') iframe.contentWindow.postMessage({ ponte: 'eloga', tipo: 'dados', db: dados }, '*');
     if (e.data.tipo === 'salvar' && (modo === 'admin' || editar) && e.data.db && typeof e.data.db === 'object') aoSalvar?.(e.data.db);
-    if (e.data.tipo === 'altura' && Number.isFinite(e.data.h)) iframe.style.height = Math.max(640, Math.min(e.data.h + 20, 20000)) + 'px';
+    // Altura fixa (tamanho da tela): o painel rola por dentro, com menus e botões sempre visíveis.
+    // A mensagem de altura enviada pelo painel é ignorada de propósito.
   };
   addEventListener('message', ouvir);
   caixa.replaceChildren(iframe);

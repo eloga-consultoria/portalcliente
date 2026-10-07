@@ -7,7 +7,7 @@ export function criarBanco() {
   const agora = new Date().toISOString();
   return {
     clients: [], profiles: [], assessments: [], self_assessments: [], operational_diagnoses: [], proposals: [], consents: [], audit_log: [],
-    app_settings: [], client_documents: [], action_plans: [], action_plan_views: [], materials: [], material_access: [],
+    app_settings: [], client_documents: [], action_plans: [], action_plan_views: [], materials: [], material_access: [], material_respostas: [],
     usuarios: {}, seq: 0, agora,
   };
 }
@@ -90,7 +90,7 @@ export async function ligar(page, banco, usuarioAtual) {
         return json(200, out, hdr);
       }
       if (metodo === 'POST') {
-        const CHAVES = { app_settings: ['key'], action_plans: ['client_id'], action_plan_views: ['client_id'], client_documents: ['client_id', 'tipo'], material_access: ['material_id', 'client_id'] };
+        const CHAVES = { app_settings: ['key'], action_plans: ['client_id'], action_plan_views: ['client_id'], client_documents: ['client_id', 'tipo'], material_access: ['material_id', 'client_id'], material_respostas: ['material_id', 'client_id'] };
         if ((req.headers()['prefer'] || '').includes('merge-duplicates') && CHAVES[tabela]) {
           const ks = (url.searchParams.get('on_conflict') || '').split(',').filter(Boolean).length ? url.searchParams.get('on_conflict').split(',') : CHAVES[tabela];
           const saida = [];
@@ -118,6 +118,7 @@ export async function ligar(page, banco, usuarioAtual) {
     }
 
     // ---------------- storage e funções
+    if (p.startsWith('/storage/v1/object/') && metodo === 'POST') return json(200, { Key: p.replace('/storage/v1/object/', ''), Id: crypto.randomUUID() });
     if (p.startsWith('/storage/')) return json(404, { message: 'not found' });
     if (p.startsWith('/functions/v1/')) {
       const nome = p.split('/').pop();

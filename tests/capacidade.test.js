@@ -37,3 +37,31 @@ test('sem salas, profissionais ou duração não calcula', () => {
   assert.equal(capacidade(ctx({ salas: '' })), null);
   assert.equal(capacidade(ctx({ duracao: 0 })), null);
 });
+
+test('capacidade por especialidade: soma profissionais × simultâneos, limitada pelas salas', () => {
+  const base = { ...contextoPadrao(), duracao: 60, salas: 4, especialidades: ['ABA', 'Fonoaudiologia'],
+    esp: { ABA: { prof: 2, simult: 2 }, Fonoaudiologia: { prof: 1, simult: 1 } } };
+  const c = capacidade(base);
+  assert.equal(c.modo, 'especialidade');
+  assert.equal(c.profissionais, 3);
+  assert.equal(c.porHorario, 5);                       // 2×2 + 1×1, há sala para todos
+  assert.equal(c.gargalo, 'profissionais');
+  assert.deepEqual(c.especialidades.map((e) => e.porHorario), [4, 1]);
+  const poucasSalas = capacidade({ ...base, salas: 2 });   // 3 profissionais, 2 salas
+  assert.equal(poucasSalas.gargalo, 'salas');
+  assert.equal(poucasSalas.porHorario, 3);              // 5 × 2/3, arredondado para baixo
+  assert.ok(poucasSalas.ganhoMensal > 0);
+});
+
+test('especialidade sem profissionais informados volta ao cálculo geral', () => {
+  const c = capacidade({ ...contextoPadrao(), duracao: 60, salas: 4, profissionais: 3, simultaneos: 2, especialidades: ['ABA'], esp: { ABA: { prof: '', simult: 2 } } });
+  assert.equal(c.modo, 'geral');
+  assert.equal(c.porHorario, 6);
+});
+
+test('com salas limitando, a soma por especialidade bate com o total por horário', () => {
+  const c = capacidade({ ...contextoPadrao(), duracao: 50, salas: 4, especialidades: ['ABA', 'Fonoaudiologia'],
+    esp: { ABA: { prof: 3, simult: 2 }, Fonoaudiologia: { prof: 2, simult: 1 } } });
+  assert.equal(c.porHorario, 6);                         // 8 × 4/5 = 6,4
+  assert.equal(c.especialidades.reduce((s, e) => s + e.porHorario, 0), 6);
+});

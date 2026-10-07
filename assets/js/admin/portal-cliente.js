@@ -2,7 +2,7 @@
 import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, fmtDataHora } from '../core/dom.js';
 import { avisar, avisarErro, confirmar, ocupado, vazio } from '../core/ui.js';
-import { estadoPadrao, mesclar } from './operacional-modelo.js';
+import { estadoPadrao, mesclar, normalizarEstado } from './operacional-modelo.js';
 import { carregarCatalogo } from './catalogo.js';
 import { relatorioHtml, propostaHtml } from '../reports/documentos-operacionais.js';
 
@@ -72,13 +72,13 @@ export async function render(p, ctx) {
     let titulo, corpo;
     if (tipo === 'relatorio') {
       if (!diag[0]) throw new Error('Ainda não há diagnóstico operacional para publicar.');
-      const state = mesclar(estadoPadrao(), diag[0].data || {});
+      const state = normalizarEstado(mesclar(estadoPadrao(), diag[0].data || {}));
       corpo = htmlPublicavel(relatorioHtml({ state, cliente: c, autodiag: ctx.autodiag, logo: ctx.logo }));
       titulo = 'Relatório de Diagnóstico Operacional';
     } else {
       const escolhida = propostas.find((x) => x.id === $('#qual-proposta', p)?.value) || propostas[0];
       if (!escolhida) throw new Error('Emita uma proposta antes de publicar.');
-      corpo = htmlPublicavel(propostaHtml({ state: mesclar(estadoPadrao(), escolhida.snapshot || {}), cliente: c, logo: ctx.logo, editavel: false }));
+      corpo = htmlPublicavel(propostaHtml({ state: normalizarEstado(mesclar(estadoPadrao(), escolhida.snapshot || {})), cliente: c, logo: ctx.logo, editavel: false }));
       titulo = 'Proposta ' + escolhida.code;
     }
     const atual = doc(tipo);

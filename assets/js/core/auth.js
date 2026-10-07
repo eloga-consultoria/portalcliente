@@ -3,6 +3,7 @@ import { db, q, registrar } from './api.js';
 import { CONFIG } from '../config.js';
 import { html, montar, $, urlSegura } from './dom.js';
 import { mensagemErro, avisar, ocupado } from './ui.js';
+import { redesSociais } from './redes.js';
 
 const LOGO = 'assets/img/eloga-marca-clara.png';
 
@@ -49,7 +50,8 @@ function telaAuth(root, conteudo) {
           <li><span class="ic" aria-hidden="true">→</span><span><b>Documentos do projeto</b>Relatórios e propostas sempre à mão, quando você precisar.</span></li>
         </ul>
       </div>
-      <p class="slogan-rodape">Você decide transformar. Nós construímos juntos. Seu resultado é o nosso.</p>
+      <div><p class="slogan-rodape">Você decide transformar. Nós construímos juntos. Seu resultado é o nosso.</p>
+        ${redesSociais('redes-auth')}</div>
     </aside>
     <section class="auth-main"><div class="auth-box">${conteudo}</div></section>
   </div>`);

@@ -5,10 +5,10 @@ import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, $$, debounce, fmtData, fmtDataHora, imprimirDocumento, nomeArquivo } from '../core/dom.js';
 import { avisar, avisarErro, confirmar, ocupado } from '../core/ui.js';
 import { COBRANCA_EXTRA, CATALOG, FRONT_KEYS, QB, QC, QD, CRIT, PH, estadoPadrao, mesclar, num, candidatas, sc, avaliar, semearOpcoes, somarDias,
-  DIAS, ESPECIALIDADES, COBRANCAS, SISTEMAS, NIVEL_SISTEMA, capacidade, recorrente, usaFrentes } from './operacional-modelo.js';
+  DIAS, ESPECIALIDADES, COBRANCAS, SISTEMAS, NIVEL_SISTEMA, capacidade, recorrente, usaFrentes, normalizarEstado, especialidadesDe } from './operacional-modelo.js';
 import { carregarCatalogo } from './catalogo.js';
 import { brl } from '../core/dom.js';
-import { relatorioHtml, propostaHtml, SECOES_RELATORIO, secaoAtiva } from '../reports/documentos-operacionais.js';
+import { relatorioHtml, propostaHtml, SECOES_RELATORIO, secaoAtiva, SECOES_PROPOSTA, secaoPropostaAtiva } from '../reports/documentos-operacionais.js';
 
 const ETAPAS = ['lead', 'autodiagnostico', 'diagnostico_operacional', 'relatorio_emitido', 'proposta_emitida', 'cliente_ativo'];
 
@@ -42,7 +42,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
   await carregarCatalogo();
   const lista = await q(db.from('operational_diagnoses').select('*').eq('client_id', cliente.id).order('updated_at', { ascending: false }).limit(1));
   let registro = lista[0] || null;
-  let state = mesclar(estadoPadrao(), registro?.data || {});
+  let state = normalizarEstado(mesclar(estadoPadrao(), registro?.data || {}));
   if (!registro) {
     state.client.profile = cliente.profile || 'terapias';
     state.client.payer = cliente.payer || 'misto';
@@ -107,19 +107,28 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
 
   function caixaCapacidade() {
     const c = capacidade(state.session.ctx);
-    if (!c) return html`<div class="notice info">Informe duração, salas e profissionais para calcular a capacidade.</div>`;
+    if (!c) return html`<div class="notice info">Informe a duração, as salas e os profissionais (no geral ou por especialidade) para calcular a capacidade.</div>`;
     const n = (v) => Number(v).toLocaleString('pt-BR');
     return html`<div class="grid g4">
-      <div class="kpi accent"><div class="k-label">Por horário</div><div class="k-value">${n(c.porHorario)}</div><div class="k-note" style="color:#a9bcc6">menor entre ${c.salas} sala(s) e ${c.profissionais} profissional(is) × ${c.simultaneos}</div></div>
+      <div class="kpi accent"><div class="k-label">Por horário</div><div class="k-value">${n(c.porHorario)}</div><div class="k-note" style="color:#a9bcc6">${c.modo === 'especialidade'
+        ? `${c.profissionais} profissional(is) por especialidade${c.salas ? `, ${c.salas} sala(s)` : ''}` : `menor entre ${c.salas} sala(s) e ${c.profissionais} profissional(is) × ${c.simultaneos}`}</div></div>
       <div class="kpi"><div class="k-label">Por semana</div><div class="k-value">${n(c.semanal)}</div><div class="k-note">${c.diasAbertos} dia(s) de atendimento</div></div>
       <div class="kpi"><div class="k-label">Por mês</div><div class="k-value">${n(c.mensal)}</div><div class="k-note">média de 4,33 semanas</div></div>
       <div class="kpi"><div class="k-label">Ocupação atual</div><div class="k-value">${c.ocupacao === null ? '—' : c.ocupacao + '%'}</div><div class="k-note">${c.ocupacao === null ? 'informe os atendimentos/mês' : 'realizados ÷ capacidade'}</div></div></div>
-      <p class="small" style="margin:10px 0 0"><b>Gargalo:</b> ${c.gargalo === 'equilibrado' ? 'salas e profissionais equilibrados.' : c.gargalo === 'salas' ? `salas (${c.ociosos} profissional(is) sem sala no mesmo horário). Com +1 sala: +${n(c.ganhoMensal)} atendimentos/mês.` : `profissionais (${c.ociosos} sala(s) ociosa(s) por horário). Com +1 profissional: +${n(c.ganhoMensal)} atendimentos/mês.`}
+      <p class="small" style="margin:10px 0 0"><b>Gargalo:</b> ${c.gargalo === 'sem_salas' ? 'informe as salas para ver o gargalo.' : c.gargalo === 'equilibrado' ? 'salas e profissionais equilibrados.' : c.gargalo === 'salas' ? `salas (${c.ociosos} profissional(is) sem sala no mesmo horário). Com +1 sala: +${n(c.ganhoMensal)} atendimentos/mês.` : `profissionais (${c.ociosos} sala(s) ociosa(s) por horário). Com +1 profissional: +${n(c.ganhoMensal)} atendimentos/mês.`}
       ${c.receitaPotencial ? html` · <b>Receita potencial:</b> ${brl(c.receitaPotencial)}/mês${c.receitaOciosa ? html` · <b>Capacidade ociosa:</b> ${brl(c.receitaOciosa)}/mês` : ''}` : ''}</p>`;
   }
 
+  // Campo numérico com botões − e + (preenchimento rápido)
+  const passo = (caminho, minimo) => { const v = get(caminho); return html`<div class="passo" role="group">
+    <button type="button" class="btn sm ghost" data-passo="${caminho}|-1|${minimo}" aria-label="Diminuir">−</button>
+    <input type="number" min="${minimo}" inputmode="numeric" data-k="${caminho}" data-num data-ctx value="${v ?? (minimo === 1 ? 1 : '')}">
+    <button type="button" class="btn sm ghost" data-passo="${caminho}|1|${minimo}" aria-label="Aumentar">+</button></div>`; };
+
   function contexto() {
     const x = state.session.ctx;
+    const esps = especialidadesDe(x);
+    const porEsp = capacidade(x)?.modo === 'especialidade' || esps.length > 0;
     return html`<div class="card"><div class="card-head"><div><h3>A · Contexto da operação</h3><p>Toque nas opções; digite só números.</p></div></div>
       <h4 class="label" style="margin:4px 0 8px">Funcionamento</h4>
       <div class="table-wrap"><table class="t"><thead><tr><th>Dia</th><th>Abre</th><th>Fecha</th><th>Intervalo (início)</th><th>Intervalo (fim)</th></tr></thead><tbody>
@@ -132,16 +141,19 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       <div class="grid g4">
         ${numero('session.ctx.duracao', 'Duração do atendimento (min)')}
         <div class="field"><label>Formato</label>${seg('session.ctx.modalidade', [['individual', 'Individual'], ['grupo', 'Em grupo'], ['misto', 'Misto']])}</div>
-        ${numero('session.ctx.simultaneos', 'Pacientes por sala no mesmo horário', 'min="1"')}
         ${numero('session.ctx.salas', 'Salas de atendimento')}
-        ${numero('session.ctx.profissionais', 'Profissionais de atendimento')}
+        ${porEsp ? '' : html`${numero('session.ctx.simultaneos', 'Pacientes por sala no mesmo horário', 'min="1"')}${numero('session.ctx.profissionais', 'Profissionais de atendimento')}`}
         ${numero('session.ctx.administrativos', 'Equipe administrativa')}
         ${numero('session.ctx.atendimentosMes', 'Atendimentos realizados/mês')}
       </div>
-      <div id="caixa-capacidade" style="margin:16px 0 20px">${caixaCapacidade()}</div>
-      <h4 class="label" style="margin:0 0 8px">Especialidades</h4>
+      <h4 class="label" style="margin:16px 0 8px">Especialidades</h4>
       <div class="chips">${ESPECIALIDADES.map((e) => chip('session.ctx.especialidades', e))}</div>
-      <input type="text" style="margin-top:8px" data-k="session.ctx.especialidadesOutras" value="${x.especialidadesOutras}" placeholder="Outras especialidades">
+      <input type="text" style="margin-top:8px" data-k="session.ctx.especialidadesOutras" data-redesenhar value="${x.especialidadesOutras}" placeholder="Outras especialidades (separe por vírgula)">
+      ${esps.length ? html`<div class="table-wrap" style="margin-top:12px"><table class="t esp-tabela"><thead><tr><th>Especialidade</th><th style="text-align:center">Nº de profissionais</th><th style="text-align:center">Atendimentos simultâneos por profissional</th></tr></thead><tbody>
+        ${esps.map((e) => html`<tr><td><b>${e}</b></td>
+          <td>${passo(`session.ctx.esp.${e}.prof`, 0)}</td><td>${passo(`session.ctx.esp.${e}.simult`, 1)}</td></tr>`)}</tbody></table></div>
+        <p class="xs muted" style="margin:6px 0 0">As salas são compartilhadas entre as especialidades. Ex.: ABA com 2 profissionais atendendo 2 pacientes ao mesmo tempo = 4 atendimentos por horário.</p>` : ''}
+      <div id="caixa-capacidade" style="margin:16px 0 20px">${caixaCapacidade()}</div>
       <h4 class="label" style="margin:18px 0 8px">Fonte de receita (% aproximado)</h4>
       <div class="grid g3">${numero('session.ctx.mix.convenio', 'Convênio %')}${numero('session.ctx.mix.particular', 'Particular %')}${numero('session.ctx.mix.liminar', 'Liminar %')}</div>
       <h4 class="label" style="margin:18px 0 8px">Modelos de cobrança</h4>
@@ -175,6 +187,14 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
           <input type="text" data-k="session.C.${i}.n" value="${state.session.C[i].n}" placeholder="Detalhe (sistema, período disponível, quem registra)"></div>`)}</div>
       <div class="card"><h3>D · Decisão</h3>${QD.map((x, i) => campoTexto(i + 1, x.q, `session.D.${x.k}`))}
         <div class="op-q"><div class="qt"><span class="qn">✓</span>O decisor participou da sessão?</div>${seg('session.D.decisorPresent', [['sim', 'Sim'], ['nao', 'Não']])}</div></div>
+      <div class="card"><div class="card-head"><div><h3>Campos adicionais</h3><p>Registre informações que não estão no roteiro. Marque as que devem entrar no relatório.</p></div></div>
+        ${state.session.extras.length ? state.session.extras.map((c, i) => html`<div class="grid campo-extra" style="grid-template-columns:1fr 2fr auto auto;gap:8px;align-items:end;margin-bottom:8px">
+          <div class="field"><label>Título</label><input type="text" maxlength="120" data-k="session.extras.${i}.titulo" value="${c.titulo || ''}" placeholder="Ex.: Lista de espera"></div>
+          <div class="field"><label>Informação</label><textarea rows="1" maxlength="2000" data-k="session.extras.${i}.valor" placeholder="Ex.: 23 pacientes aguardando ABA">${c.valor || ''}</textarea></div>
+          <label class="check" style="margin-bottom:10px"><input type="checkbox" data-chk="session.extras.${i}.on" ${c.on !== false ? html`checked` : ''}> No relatório</label>
+          <button type="button" class="btn sm ghost" data-remover-campo="${i}" aria-label="Remover campo">Remover</button></div>`)
+          : html`<p class="muted small">Nenhum campo adicional.</p>`}
+        <button class="btn sm secondary" type="button" data-acao="mais-campo">+ Adicionar campo</button></div>
       <div class="card"><h3>Encerramento</h3><div class="grid g2">
         <div class="field"><label>Data e horário da devolutiva (20 min)</label><input type="text" data-k="session.devolutiva" value="${state.session.devolutiva}" placeholder="ex.: 06/10 às 14h"></div>
         <div class="field"><label>Anotações livres</label><textarea data-k="session.freeNotes">${state.session.freeNotes}</textarea></div></div></div>
@@ -201,10 +221,11 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         : html`<p class="muted"><i>Selecione as frentes exploradas na aba Sessão (bloco B).</i></p>`}
       <p class="xs muted" style="margin-top:8px"><b>Gravidade:</b> 0 pontual · 3 estrutural e recorrente | <b>Impacto:</b> 0 não identificado · 3 perda relevante ou mensurável | <b>Urgência:</b> 0 sem prazo · 3 precisa mudar agora | <b>Prontidão dos dados:</b> 0 sem registro · 3 três meses ou mais extraíveis</p></div>
       <div class="result-boxes">
-        <div class="box"><small>Frente prioritária</small><div class="v">${ev.front ? CATALOG.fronts[ev.front].name : '—'}</div><p>${state.matrix.ovFront ? 'Definida manualmente.' : 'Maior soma de Gravidade + Impacto.'}</p></div>
+        <div class="box"><small>${ev.fronts.length > 1 ? 'Frentes prioritárias' : 'Frente prioritária'}</small><div class="v">${ev.fronts.map((k) => CATALOG.fronts[k].name).join(' · ') || '—'}</div><p>${ev.manual ? 'Definida(s) manualmente.' : 'Maior soma de Gravidade + Impacto.'}</p></div>
         <div class="box"><small>Formato a ofertar</small><div class="v">${ev.format ? F[ev.format].name : '—'}</div><p>${state.matrix.ovFormat ? 'Definido manualmente.' : ev.why || 'Pontue a matriz para obter a recomendação.'}</p></div></div>
       <div class="card"><h3>Ajuste manual (opcional)</h3><div class="grid g2">
-        <div class="field"><label>Frente prioritária</label><select data-k="matrix.ovFront"><option value="">Automático</option>${FRONT_KEYS.map((k) => html`<option value="${k}" ${state.matrix.ovFront === k ? html`selected` : ''}>${CATALOG.fronts[k].name}</option>`)}</select></div>
+        <div class="field"><label>Frentes prioritárias (marque uma ou mais; nenhuma = automático)</label>
+          <div class="chips">${FRONT_KEYS.map((k) => { const on = state.matrix.ovFronts.includes(k); return html`<button type="button" class="chip ${on ? 'on' : ''}" data-ovfront="${k}" aria-pressed="${on}">${CATALOG.fronts[k].name}</button>`; })}</div></div>
         <div class="field"><label>Formato a ofertar</label><select data-k="matrix.ovFormat"><option value="">Automático</option>${Object.entries(F).map(([k, v]) => html`<option value="${k}" ${state.matrix.ovFormat === k ? html`selected` : ''}>${v.name}</option>`)}</select></div></div></div>
       <div class="card"><h3>Principais achados <span class="badge purple">3 a 5</span></h3>
         ${state.matrix.findings.map((f, i) => html`<div class="grid" style="grid-template-columns:2fr 1fr auto;align-items:end;margin-bottom:10px">
@@ -213,7 +234,10 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
           <div>${state.matrix.findings.length > 3 ? html`<button type="button" class="btn sm ghost" data-remover-achado="${i}" aria-label="Remover achado ${i + 1}">Remover</button>` : ''}</div></div>`)}
         <button class="btn sm secondary" type="button" data-acao="mais-achado" ${state.matrix.findings.length >= 5 ? html`disabled` : ''}>+ Achado</button></div>
       <div class="card"><h3>Recomendações imediatas <span class="badge purple">o cliente aplica sozinho</span></h3>
-        ${state.matrix.quickwins.map((x, i) => html`<div class="field" style="margin-bottom:8px"><label>Recomendação ${i + 1}</label><input type="text" data-k="matrix.quickwins.${i}" value="${x}"></div>`)}</div>
+        ${state.matrix.quickwins.map((x, i) => html`<div class="grid" style="grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:8px">
+          <div class="field"><label>Recomendação ${i + 1}</label><input type="text" data-k="matrix.quickwins.${i}.t" value="${x.t}"></div>
+          <button type="button" class="btn sm ghost" data-remover-rec="${i}" aria-label="Remover recomendação ${i + 1}">Remover</button></div>`)}
+        <button class="btn sm secondary" type="button" data-acao="mais-rec">+ Adicionar recomendação</button></div>
       <div class="card"><h3>Objetivo do cliente</h3><div class="grid g2">
         <div class="field"><label>O que precisa ser diferente em 3 meses (palavras do cliente)</label><textarea data-k="matrix.goal3m">${state.matrix.goal3m}</textarea></div>
         <div class="field"><label>Resumo executivo do relatório (3 linhas)</label><textarea data-k="matrix.exec" placeholder="Se vazio, é gerado automaticamente.">${state.matrix.exec}</textarea></div></div></div>
@@ -221,11 +245,22 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
   }
 
   // ------------------------------------------------------------ RELATÓRIO
+  function itensRelatorio() {
+    const grupo = (titulo, itens) => (itens.length ? html`<div style="margin-top:12px"><p class="label" style="margin:0 0 6px">${titulo}</p>
+      <div class="itens-rel">${itens.map(([cam, texto, on]) => html`<label class="check"><input type="checkbox" data-chk="${cam}" ${on ? html`checked` : ''}> <span>${texto}</span></label>`)}</div></div>` : '');
+    return html`<details class="itens-detalhe" open><summary class="small"><b>Itens incluídos</b> · desmarque o que não deve aparecer</summary>
+      ${grupo('Principais achados', state.matrix.findings.map((f, i) => [`matrix.findings.${i}.on`, f.t, f.on !== false]).filter(([, t]) => t.trim()))}
+      ${grupo('Recomendações imediatas', state.matrix.quickwins.map((x, i) => [`matrix.quickwins.${i}.on`, x.t, x.on !== false]).filter(([, t]) => t.trim()))}
+      ${grupo('Campos adicionais', state.session.extras.map((c, i) => [`session.extras.${i}.on`, [c.titulo, c.valor].filter(Boolean).join(': '), c.on !== false]).filter(([, t]) => t.trim()))}
+      ${!state.matrix.findings.some((f) => f.t.trim()) && !state.matrix.quickwins.some((x) => x.t.trim()) && !state.session.extras.length ? html`<p class="xs muted" style="margin:8px 0 0">Ainda não há achados, recomendações ou campos adicionais preenchidos.</p>` : ''}</details>`;
+  }
+
   function relatorio() {
     return html`<div class="area-doc">
       <div class="card tight no-print" style="margin-bottom:12px"><div class="card-head" style="margin-bottom:8px"><div><h3 style="margin:0">Seções do relatório</h3>
         <p>Desmarque o que não deve entrar no PDF. Os textos com contorno podem ser editados direto no documento.</p></div></div>
-        <div class="chips">${SECOES_RELATORIO.map(([id, nome]) => html`<label class="chip"><input type="checkbox" data-secao="${id}" ${secaoAtiva(state, id) ? html`checked` : ''}>${nome}</label>`)}</div></div>
+        <div class="chips">${SECOES_RELATORIO.map(([id, nome]) => html`<label class="chip"><input type="checkbox" data-secao="${id}" ${secaoAtiva(state, id) ? html`checked` : ''}>${nome}</label>`)}</div>
+        ${itensRelatorio()}</div>
       <div class="toolbar no-print" style="margin-bottom:12px"><span class="small muted" style="margin-right:auto">Confira o documento antes de gerar o PDF.
         ${registro?.report_issued_at ? html`<br>Último PDF gerado em ${fmtDataHora(registro.report_issued_at)}.` : ''}</span>
         <button class="btn secondary" type="button" data-acao="atualizar-doc">Atualizar com os dados</button>
@@ -280,7 +315,18 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         <button class="btn sm secondary" type="button" data-acao="adicionar-extra">+ Adicionar custo adicional</button>
         <div class="field" style="margin-top:14px"><label>Informações adicionais (aparecem nas condições da proposta)</label>
           <textarea data-k="proposal.infoAdicional" rows="3" maxlength="1500" placeholder="Ex.: reajuste, condições especiais, observações sobre o escopo">${P.infoAdicional || ''}</textarea></div>
+        <h3 style="margin:18px 0 6px">Seções adicionais</h3>
+        <p class="xs muted" style="margin:0 0 8px">Crie seções próprias (ex.: Cronograma, Equipe envolvida, Garantias). Aparecem depois das Condições.</p>
+        ${P.secoesExtras.map((x, i) => html`<div class="grid" style="grid-template-columns:1fr 2fr auto auto;gap:8px;align-items:end;margin-bottom:8px">
+          <div class="field"><label>Título da seção</label><input type="text" maxlength="120" data-k="proposal.secoesExtras.${i}.titulo" value="${x.titulo || ''}"></div>
+          <div class="field"><label>Texto</label><textarea rows="2" maxlength="3000" data-k="proposal.secoesExtras.${i}.texto">${x.texto || ''}</textarea></div>
+          <label class="check" style="margin-bottom:10px"><input type="checkbox" data-chk="proposal.secoesExtras.${i}.on" ${x.on !== false ? html`checked` : ''}> No PDF</label>
+          <button type="button" class="btn sm ghost" data-remover-secao="${i}">Remover</button></div>`)}
+        <button class="btn sm secondary" type="button" data-acao="mais-secao">+ Adicionar seção</button>
       </div>
+      <div class="card tight no-print"><div class="card-head" style="margin-bottom:8px"><div><h3 style="margin:0">Seções da proposta</h3>
+        <p>Desmarque o que não deve entrar no PDF. Os textos com contorno podem ser editados direto no documento.</p></div></div>
+        <div class="chips">${SECOES_PROPOSTA.map(([id, nome]) => html`<label class="chip"><input type="checkbox" data-secao-prop="${id}" ${secaoPropostaAtiva(state, id) ? html`checked` : ''}>${nome}</label>`)}</div></div>
       <div class="area-doc">
         <div class="toolbar no-print" style="margin-bottom:12px"><span class="small muted" style="margin-right:auto">${emitidaAtual ? html`Proposta <b>${P.code}</b> emitida em ${fmtData(emitidaAtual.issued_at)}. Alterações exigem nova versão.` : 'Rascunho: confira antes de emitir.'}</span>
           <button class="btn secondary" type="button" data-acao="atualizar-doc">Atualizar com os dados</button>
@@ -320,11 +366,13 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       const t = e.target;
       if (t.dataset.chk) { set(t.dataset.chk, t.checked); mudou(); redesenhar(); return; }
       if (t.dataset.secao) { state.report.secoes = { ...(state.report.secoes || {}), [t.dataset.secao]: t.checked }; mudou(); redesenhar(); return; }
-      if (t.dataset.k && (t.tagName === 'SELECT' || /auto\.pillars|proposal\.(extras|infoAdicional|onsite|payment)/.test(t.dataset.k))) redesenhar();
+      if (t.dataset.secaoProp) { state.proposal.secoes = { ...(state.proposal.secoes || {}), [t.dataset.secaoProp]: t.checked }; mudou(); redesenhar(); return; }
+      if (t.hasAttribute('data-redesenhar')) { redesenhar(); return; }
+      if (t.dataset.k && (t.tagName === 'SELECT' || /auto\.pillars|proposal\.(extras|infoAdicional|onsite|payment|secoesExtras)/.test(t.dataset.k))) redesenhar();
       if (t.dataset.preco || t.dataset.opMeses) redesenhar();
       if (t.dataset.opTipo) {
         const op = state.proposal.options[+t.dataset.opTipo]; op.type = t.value;
-        const ev = avaliar(state); if (!op.fronts.length && ev.front && usaFrentes(CATALOG.formats[t.value])) op.fronts = [ev.front];
+        const ev = avaliar(state); if (!op.fronts.length && ev.front && usaFrentes(CATALOG.formats[t.value])) op.fronts = [...ev.fronts];
         mudou(); redesenhar();
       }
       if (t.dataset.opSistema) { state.proposal.options[+t.dataset.opSistema].system = t.checked; mudou(); redesenhar(); }
@@ -343,7 +391,15 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
     el.addEventListener('click', async (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.seg) { const atual = get(b.dataset.seg); set(b.dataset.seg, atual === b.dataset.v ? '' : b.dataset.v); mudou(); redesenhar(); return; }
-      if (b.dataset.lista) { const a = get(b.dataset.lista) || []; const i = a.indexOf(b.dataset.v); i > -1 ? a.splice(i, 1) : a.push(b.dataset.v); set(b.dataset.lista, a); mudou(); b.classList.toggle('on', i < 0); b.setAttribute('aria-pressed', String(i < 0)); return; }
+      if (b.dataset.lista) { const a = get(b.dataset.lista) || []; const i = a.indexOf(b.dataset.v); i > -1 ? a.splice(i, 1) : a.push(b.dataset.v); set(b.dataset.lista, a); mudou();
+        if (b.dataset.lista === 'session.ctx.especialidades') { redesenhar(); return; }
+        b.classList.toggle('on', i < 0); b.setAttribute('aria-pressed', String(i < 0)); return; }
+      if (b.dataset.passo) { const [cam, d, min] = b.dataset.passo.split('|'); const atual = num(get(cam)) ?? (+min === 1 ? 1 : 0); set(cam, Math.max(+min, atual + +d)); mudou();
+        const inp = b.parentElement.querySelector('input'); if (inp) inp.value = get(cam); const cx = $('#caixa-capacidade', el); if (cx) montar(cx, caixaCapacidade()); return; }
+      if (b.dataset.ovfront) { const a = state.matrix.ovFronts, k = b.dataset.ovfront, i = a.indexOf(k); i > -1 ? a.splice(i, 1) : a.push(k); state.matrix.ovFront = a[0] || ''; mudou(); redesenhar(); return; }
+      if (b.dataset.removerRec) { state.matrix.quickwins.splice(+b.dataset.removerRec, 1); mudou(); redesenhar(); return; }
+      if (b.dataset.removerCampo) { state.session.extras.splice(+b.dataset.removerCampo, 1); mudou(); redesenhar(); return; }
+      if (b.dataset.removerSecao) { state.proposal.secoesExtras.splice(+b.dataset.removerSecao, 1); mudou(); redesenhar(); return; }
       if (b.dataset.frente) { const a = state.session.fronts, k = b.dataset.frente, i = a.indexOf(k); i > -1 ? a.splice(i, 1) : a.push(k); mudou(); redesenhar(); return; }
       if (b.dataset.nota) { const [k, c, nn] = b.dataset.nota.split('|'); const s = sc(state, k); s[c] = s[c] === +nn ? null : +nn; mudou(); redesenhar(); return; }
       if (b.dataset.removerAchado) { state.matrix.findings.splice(+b.dataset.removerAchado, 1); mudou(); redesenhar(); return; }
@@ -361,7 +417,10 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
           b.textContent = cron.inicio ? 'Pausar' : 'Retomar'; tick(el); break;
         case 'cron-zerar': cron.inicio = null; cron.acumulado = 0; clearInterval(cron.int); redesenhar(); break;
         case 'copiar-dias': { const d = state.session.ctx.dias; ['ter', 'qua', 'qui', 'sex'].forEach((k) => { d[k] = { ...d.seg }; }); mudou(); redesenhar(); avisar('Horário de segunda copiado para terça a sexta.'); break; }
-        case 'mais-achado': if (state.matrix.findings.length < 5) { state.matrix.findings.push({ t: '', i: '' }); mudou(); redesenhar(); } break;
+        case 'mais-achado': if (state.matrix.findings.length < 5) { state.matrix.findings.push({ t: '', i: '', on: true }); mudou(); redesenhar(); } break;
+        case 'mais-rec': state.matrix.quickwins.push({ t: '', on: true }); mudou(); redesenhar(); break;
+        case 'mais-campo': state.session.extras.push({ titulo: '', valor: '', on: true }); mudou(); redesenhar(); break;
+        case 'mais-secao': state.proposal.secoesExtras.push({ titulo: '', texto: '', on: true }); mudou(); redesenhar(); break;
         case 'atualizar-doc': redesenhar(); avisar('Documento atualizado.'); break;
         case 'pdf-relatorio': await ocupado(b, gerarRelatorio); break;
         case 'adicionar-extra': (state.proposal.extras ||= []).push({ desc: '', cobranca: 'unico', valor: '' }); mudou(); redesenhar(); break;
@@ -409,7 +468,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
   function imprimirSnapshot(p) {
     const caixa = document.createElement('div');
     caixa.className = 'doc';
-    montar(caixa, propostaHtml({ state: mesclar(estadoPadrao(), p.snapshot), cliente, logo, editavel: false }));
+    montar(caixa, propostaHtml({ state: normalizarEstado(mesclar(estadoPadrao(), p.snapshot)), cliente, logo, editavel: false }));
     imprimirDocumento(caixa, 'ELOGA_Proposta_' + p.code + '_' + nomeArquivo(cliente.name));
     registrar('proposta.pdf_gerado', { entidade: 'proposals', id: p.id, cliente: cliente.id, detalhes: { codigo: p.code, reimpressao: true } });
   }

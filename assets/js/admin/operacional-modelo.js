@@ -100,13 +100,30 @@ export const estadoPadrao = () => ({
   client: { sessionDate: hoje(), profile: 'terapias', payer: 'misto' },
   auto: { overall: '', level: '', leadClass: '', date: '', notes: '', pillars: { fat: '', fin: '', com: '', age: '', exp: '', reg: '' } },
   session: { ctx: contextoPadrao(), fronts: [], A: ['', '', '', '', ''], B: {}, C: [{ v: '', n: '' }, { v: '', n: '' }, { v: '', n: '' }],
-    D: { who: '', nochange: '', success: '', team: '', budget: '', decisorPresent: '' }, devolutiva: '', freeNotes: '' },
-  matrix: { scores: {}, ovFront: '', ovFormat: '', findings: [{ t: '', i: '' }, { t: '', i: '' }, { t: '', i: '' }], quickwins: ['', '', ''], goal3m: '', exec: '' },
+    D: { who: '', nochange: '', success: '', team: '', budget: '', decisorPresent: '' }, devolutiva: '', freeNotes: '', extras: [] },
+  matrix: { scores: {}, ovFront: '', ovFronts: [], ovFormat: '', findings: [{ t: '', i: '', on: true }, { t: '', i: '', on: true }, { t: '', i: '', on: true }],
+    quickwins: [{ t: '', on: true }, { t: '', on: true }, { t: '', on: true }], goal3m: '', exec: '' },
   report: { edits: {} },
   proposal: { date: hoje(), validity: 15, code: '', onsite: 0, payment: 'Mensal, via PIX ou boleto, com vencimento no dia 10',
     options: [{ type: '', fronts: [], months: 3, system: false, recommended: true, prices: {} }, { type: '', fronts: [], months: 3, system: false, recommended: false, prices: {} }],
-    extras: [], infoAdicional: '' },
+    extras: [], infoAdicional: '', secoes: {}, secoesExtras: [] },
 });
+
+/** Ajusta estados salvos em versões anteriores (recomendações em texto, frente única). */
+export function normalizarEstado(state) {
+  const m = state.matrix;
+  m.quickwins = (m.quickwins || []).map((x) => (typeof x === 'string' ? { t: x, on: true } : { t: x?.t || '', on: x?.on !== false }));
+  m.findings = (m.findings || []).map((f) => ({ t: f?.t || '', i: f?.i || '', on: f?.on !== false }));
+  if (!Array.isArray(m.ovFronts)) m.ovFronts = [];
+  if (!m.ovFronts.length && m.ovFront) m.ovFronts = [m.ovFront];
+  state.session.extras = Array.isArray(state.session.extras) ? state.session.extras : [];
+  state.session.ctx.esp = state.session.ctx.esp && typeof state.session.ctx.esp === 'object' ? state.session.ctx.esp : {};
+  state.proposal.secoesExtras = Array.isArray(state.proposal.secoesExtras) ? state.proposal.secoesExtras : [];
+  return state;
+}
+/** Texto e inclusão de uma recomendação (aceita o formato antigo, só texto). */
+export const recTexto = (x) => (typeof x === 'string' ? x : x?.t || '');
+export const recAtiva = (x) => typeof x === 'string' || x?.on !== false;
 
 /** Custos adicionais da proposta: descrição, forma de cobrança e valor. */
 export const COBRANCA_EXTRA = [['unico', 'Valor único'], ['mensal', 'Por mês'], ['encontro', 'Por encontro'], ['hora', 'Por hora']];
@@ -142,7 +159,10 @@ export function avaliar(state) {
     else if (u >= 2 && dec) { fmt = 'programa'; why = 'Dados disponíveis, urgência alta e decisor presente.'; }
     else { fmt = 'analise'; why = 'Dados disponíveis, mas com indecisão, urgência moderada ou decisor ausente: análise pontual como porta de entrada (valor abatido do programa).'; }
   }
-  return { rows, prioAuto: prio?.k || '', fmtAuto: fmt, why, front: state.matrix.ovFront || prio?.k || '', format: state.matrix.ovFormat || fmt };
+  const manuais = (Array.isArray(state.matrix.ovFronts) && state.matrix.ovFronts.length ? state.matrix.ovFronts : (state.matrix.ovFront ? [state.matrix.ovFront] : []))
+    .filter((k) => FRONT_KEYS.includes(k));
+  const fronts = manuais.length ? manuais : (prio ? [prio.k] : []);
+  return { rows, prioAuto: prio?.k || '', fmtAuto: fmt, why, fronts, manual: manuais.length > 0, front: fronts[0] || '', format: state.matrix.ovFormat || fmt };
 }
 
 export function faixa(v) {
@@ -197,7 +217,7 @@ export function aplicarCatalogo(salvo) {
 export function semearOpcoes(state) {
   const ev = avaliar(state), o = state.proposal.options;
   if (o[0].type || !ev.format) return;
-  const f = ev.front ? [ev.front] : [];
+  const f = [...ev.fronts];
   if (ev.format === 'autonomo') { o[0] = { ...o[0], type: 'autonomo', fronts: [], recommended: true }; o[1] = { ...o[1], type: '', recommended: false }; }
   else if (ev.format === 'kit') { o[0] = { ...o[0], type: 'kit', fronts: f, recommended: true }; o[1] = { ...o[1], type: 'programa', fronts: f, recommended: false }; }
   else if (ev.format === 'analise') { o[0] = { ...o[0], type: 'analise', fronts: f, recommended: false }; o[1] = { ...o[1], type: 'programa', fronts: f, recommended: true }; }
@@ -219,7 +239,7 @@ const dia = (aberto) => ({ aberto, ini: '08:00', fim: '18:00', intIni: '12:00', 
 export const contextoPadrao = () => ({
   dias: { seg: dia(true), ter: dia(true), qua: dia(true), qui: dia(true), sex: dia(true), sab: dia(false), dom: dia(false) },
   duracao: 50, modalidade: 'individual', simultaneos: 1, salas: '', profissionais: '', administrativos: '',
-  especialidades: [], especialidadesOutras: '', atendimentosMes: '',
+  especialidades: [], especialidadesOutras: '', atendimentosMes: '', esp: {},
   mix: { convenio: '', particular: '', liminar: '' },
   sistemas: { agenda: '', prontuario: '', crm: '', faturamento: '' },
   cobranca: [], valorSessao: '', pacoteSessoes: '', pacoteValor: '', mensalidade: '', observacoes: '',
@@ -240,36 +260,58 @@ export function minutosDeAtendimento(d) {
 
 export const SEMANAS_POR_MES = 52 / 12;
 
+/** Especialidades informadas (lista + "outras", separadas por vírgula). */
+export function especialidadesDe(ctx) {
+  const outras = String(ctx?.especialidadesOutras || '').split(/[,;]/).map((x) => x.replace(/\./g, '').trim()).filter(Boolean);
+  return [...new Set([...(ctx?.especialidades || []), ...outras])];
+}
+const inteiro = (v, min = 0) => Math.max(min, Math.floor(+v || 0));
+
 /**
  * Capacidade de atendimentos.
- * Por horário = menor número entre salas e profissionais × pacientes simultâneos por sala
- * (cada profissional ocupa uma sala por vez). Horários por dia = minutos de atendimento ÷ duração.
+ * Modo por especialidade (quando há profissionais informados por especialidade):
+ *   por horário = Σ (profissionais × atendimentos simultâneos) da especialidade,
+ *   limitado pelas salas (as salas são compartilhadas: se houver menos salas que
+ *   profissionais, todas as especialidades são reduzidas na mesma proporção).
+ * Modo geral: menor número entre salas e profissionais × pacientes simultâneos por sala.
+ * Horários por dia = minutos de atendimento (sem os intervalos) ÷ duração.
  */
 export function capacidade(ctx) {
-  const salas = Math.max(0, Math.floor(+ctx?.salas || 0));
-  const prof = Math.max(0, Math.floor(+ctx?.profissionais || 0));
-  const simult = Math.max(1, Math.floor(+ctx?.simultaneos || 1));
+  const salas = inteiro(ctx?.salas);
   const dur = Math.max(0, +ctx?.duracao || 0);
-  if (!salas || !prof || !dur) return null;
-  const frentes = Math.min(salas, prof);
-  const porHorario = frentes * simult;
-  const porDia = DIAS.map(([k, nome]) => {
-    const min = minutosDeAtendimento(ctx.dias?.[k]);
-    const horarios = Math.floor(min / dur);
-    return { k, nome, aberto: !!ctx.dias?.[k]?.aberto, minutos: min, horarios, atendimentos: horarios * porHorario };
-  });
+  const linhasEsp = especialidadesDe(ctx).map((nome) => ({ nome, prof: inteiro(ctx?.esp?.[nome]?.prof), simult: inteiro(ctx?.esp?.[nome]?.simult ?? 1, 1) }))
+    .filter((r) => r.prof > 0);
+  const porEsp = linhasEsp.length > 0;
+  const prof = porEsp ? linhasEsp.reduce((s, r) => s + r.prof, 0) : inteiro(ctx?.profissionais);
+  const simult = porEsp ? null : inteiro(ctx?.simultaneos ?? 1, 1);
+  if (!dur || !prof || (!porEsp && !salas)) return null;
+  const demanda = porEsp ? linhasEsp.reduce((s, r) => s + r.prof * r.simult, 0) : null;
+  const porHorarioDe = (sl, pf) => (porEsp
+    ? Math.floor(demanda * (pf / prof) * (sl ? Math.min(1, sl / pf) : 1))
+    : Math.min(sl, pf) * simult);
+  const porHorario = porHorarioDe(salas, prof);
+  const minutosDia = DIAS.map(([k, nome]) => ({ k, nome, aberto: !!ctx.dias?.[k]?.aberto, minutos: minutosDeAtendimento(ctx.dias?.[k]) }));
+  const horariosSemana = minutosDia.reduce((s, d) => s + Math.floor(d.minutos / dur), 0);
+  const porDia = minutosDia.map((d) => { const horarios = Math.floor(d.minutos / dur); return { ...d, horarios, atendimentos: horarios * porHorario }; });
   const semanal = porDia.reduce((s, d) => s + d.atendimentos, 0);
   const mensal = Math.round(semanal * SEMANAS_POR_MES);
-  const gargalo = salas < prof ? 'salas' : prof < salas ? 'profissionais' : 'equilibrado';
-  // Quanto cresce eliminando o gargalo (+1 sala ou +1 profissional)
-  const novoFrentes = gargalo === 'equilibrado' ? frentes : Math.min(gargalo === 'salas' ? salas + 1 : salas, gargalo === 'profissionais' ? prof + 1 : prof);
-  const mensalSemGargalo = Math.round(semanal / frentes * novoFrentes * SEMANAS_POR_MES);
+  const gargalo = !salas ? 'sem_salas' : salas < prof ? 'salas' : prof < salas ? 'profissionais' : 'equilibrado';
+  const comMais = gargalo === 'salas' ? porHorarioDe(salas + 1, prof) : gargalo === 'profissionais' ? porHorarioDe(salas, prof + 1) : porHorario;
+  const ganhoMensal = Math.round((comMais - porHorario) * horariosSemana * SEMANAS_POR_MES);
+  const fator = porEsp && salas ? Math.min(1, salas / prof) : 1;
+  // Divide o total por horário entre as especialidades (maiores restos), para a soma bater com o total
+  const brutos = linhasEsp.map((r) => r.prof * r.simult * fator);
+  const porEspHorario = brutos.map(Math.floor);
+  let sobra = porHorario - porEspHorario.reduce((a, b) => a + b, 0);
+  brutos.map((v, i) => [v - Math.floor(v), i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (sobra > 0) { porEspHorario[i]++; sobra--; } });
+  const especialidades = linhasEsp.map((r, i) => ({ ...r, porHorario: porEspHorario[i], mensal: Math.round(porEspHorario[i] * horariosSemana * SEMANAS_POR_MES) }));
   const realizados = +ctx.atendimentosMes || 0;
   const ticket = +ctx.valorSessao || ((+ctx.pacoteValor && +ctx.pacoteSessoes) ? +ctx.pacoteValor / +ctx.pacoteSessoes : 0);
   return {
+    modo: porEsp ? 'especialidade' : 'geral', especialidades,
     salas, profissionais: prof, simultaneos: simult, duracao: dur, porHorario, porDia, semanal, mensal,
     diasAbertos: porDia.filter((d) => d.aberto && d.horarios > 0).length,
-    gargalo, ociosos: Math.abs(salas - prof), ganhoMensal: mensalSemGargalo - mensal,
+    gargalo, ociosos: Math.abs(salas - prof), ganhoMensal,
     ocupacao: realizados && mensal ? Math.round(realizados / mensal * 100) : null,
     ticket: ticket || null, receitaPotencial: ticket ? Math.round(mensal * ticket) : null,
     receitaOciosa: ticket && realizados ? Math.round(Math.max(0, mensal - realizados) * ticket) : null,

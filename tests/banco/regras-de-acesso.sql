@@ -84,3 +84,30 @@ select data->'clients'->'10000000-0000-0000-0000-00000000000a'->'plano'->0->>'wh
        data->'clients'->'10000000-0000-0000-0000-00000000000a'->'swot' as swot_preservada
   from public.action_plans where client_id='10000000-0000-0000-0000-00000000000a';
 select count(*) as auditoria_plano from public.audit_log where action='cliente.plano_editado';
+
+\echo '=== PLANILHAS PREENCHÍVEIS (008) ==='
+reset role;
+update public.clients set access_expires_at = null, is_active = true;
+insert into public.materials(id, titulo, tipo, storage_path, estrutura) values
+ ('30000000-0000-0000-0000-00000000000a', 'Kit agenda', 'arquivo', 'x/kit.xlsx', '{"versao":1,"abas":[{"nome":"A","linhas":[["Prof","Horas"],["Ana",""]]}]}');
+insert into public.material_access(material_id, client_id) values ('30000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a');
+set role authenticated;
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b","aal":"aal1"}';
+\echo '--- cliente A grava a própria cópia (tenta gravar drive_url: deve ficar vazio)'
+insert into public.material_respostas(material_id, client_id, dados, drive_url) values ('30000000-0000-0000-0000-00000000000a','10000000-0000-0000-0000-00000000000a','{"abas":[{"linhas":[[],["","8"]]}]}','https://malicioso');
+select count(*) as copias_a, max(drive_url) as drive_url_vazio from public.material_respostas;
+\echo '--- cliente A tenta gravar como clínica B: deve dar erro'
+insert into public.material_respostas(material_id, client_id, dados) values ('30000000-0000-0000-0000-00000000000a','10000000-0000-0000-0000-00000000000b','{}');
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000c","aal":"aal1"}';
+\echo '--- cliente B (sem liberação): não vê a cópia de A (0) e não grava (erro)'
+select count(*) as copias_visiveis_b from public.material_respostas;
+insert into public.material_respostas(material_id, client_id, dados) values ('30000000-0000-0000-0000-00000000000a','10000000-0000-0000-0000-00000000000b','{}');
+reset role;
+insert into public.material_access(material_id, client_id) values ('30000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000b');
+set role authenticated;
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000c","aal":"aal1"}';
+\echo '--- cliente B liberado: começa em branco (0 cópias visíveis) e cria a dele (1)'
+select count(*) as copias_visiveis_b from public.material_respostas;
+insert into public.material_respostas(material_id, client_id, dados) values ('30000000-0000-0000-0000-00000000000a','10000000-0000-0000-0000-00000000000b','{"abas":[]}');
+select count(*) as copias_visiveis_b from public.material_respostas;
+reset role;

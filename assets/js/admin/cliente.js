@@ -6,7 +6,7 @@ import { criarOperacional } from './operacional.js';
 import { tabelaAuditoria } from './auditoria.js';
 import { csv, json } from './exportar.js';
 import { PILLARS } from '../import/autodiagnostico-modelo.js';
-import { ROTULOS_CAMPOS } from '../import/leitores.js';
+import { ROTULOS_CAMPOS, limparItem } from '../import/leitores.js';
 import { PERGUNTAS } from '../client/posicionamento-perguntas.js';
 import { analisar, textoResposta } from '../reports/posicionamento.js';
 import { ir, aoSairDaTela } from '../app.js';
@@ -314,8 +314,8 @@ async function autodiagnostico(p, ctx) {
       <div class="card"><h3>Notas por pilar</h3>${(a.pillars || []).map((x) => html`<div style="margin:10px 0"><div class="row between small"><span>${x.name}</span><b>${x.score ?? 'N/A'}</b></div>
         <div class="bar ${x.score == null ? '' : x.score < 40 ? 'red' : x.score < 60 ? 'amber' : 'teal'}"><i style="width:${Math.max(0, Math.min(100, +x.score || 0))}%"></i></div></div>`)}</div>
       <div class="card"><h3>Prioridades</h3>${(a.priorities || []).map((x, i) => html`<div style="margin-bottom:10px"><b>${i + 1}. ${PILLARS.find((pp) => pp.id === x.id)?.name || x.id}</b> <span class="xs muted">${x.nota ?? ''}/100</span>
-        ${(x.itens || []).map((it) => html`<p class="small" style="margin:2px 0 0">• Respondeu “${it.rotulo}” para: ${it.t}</p>`)}</div>`)}
-        ${(a.unknowns || []).length ? html`<h3 style="margin-top:16px">O que a operação ainda não enxerga</h3><ul class="small">${a.unknowns.map((u) => html`<li><b>${u.pillar}:</b> ${u.t}</li>`)}</ul>` : ''}</div></div>
+        ${(x.itens || []).map((it) => html`<p class="small" style="margin:2px 0 0">• Respondeu “${it.rotulo}” para: ${limparItem(it.t)}</p>`)}</div>`)}
+        ${(a.unknowns || []).length ? html`<h3 style="margin-top:16px">O que a operação ainda não enxerga</h3><ul class="small">${a.unknowns.map((u) => html`<li><b>${u.pillar}:</b> ${limparItem(u.t)}</li>`)}</ul>` : ''}</div></div>
     <div class="grid g2">${bloco('identificacao', 'Identificação')}${bloco('estrutura', 'Estrutura e operação')}${bloco('dores', 'Prioridades e dores')}${bloco('decisao', 'Momento e decisão')}</div>
     ${Object.keys(resp).length ? html`<div class="card"><h3>Respostas item a item</h3>${PILLARS.map((pl) => {
       const itens = pl.items.filter((it) => resp[it.id]);

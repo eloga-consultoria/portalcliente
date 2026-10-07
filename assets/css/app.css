@@ -333,10 +333,38 @@ table.t .num{text-align:right;font-variant-numeric:tabular-nums}
 .cli-menu button:hover{background:var(--line-2)}
 .cli-menu button[aria-current=page]{background:var(--purple-soft);color:var(--purple);border-left-color:var(--purple)}
 @media(max-width:980px){.cli-layout{grid-template-columns:1fr}.cli-menu{position:static;flex-direction:row;overflow-x:auto;flex-wrap:nowrap}.cli-grupo{display:none}.cli-menu button{white-space:nowrap}}
-.painel-frame{width:100%;min-height:640px;border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;display:block}
+.painel-frame{width:100%;height:calc(100vh - 170px);height:calc(100dvh - 170px);min-height:520px;border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;display:block}
 .cartao-portal{display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit;transition:transform var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
 .cartao-portal:hover{text-decoration:none;transform:translateY(-2px);box-shadow:var(--sh-2)}
 .cartao-portal .btn{align-self:flex-start;margin-top:auto}
 .cartao-portal.destaque{border-color:var(--lime-2);background:linear-gradient(180deg,#fff, var(--lime-soft))}
 .leitor-paginas{max-height:80vh;overflow:auto;user-select:none}
 @media print{body.sem-impressao *{visibility:hidden!important}body.sem-impressao:after{content:"Este documento está disponível apenas para visualização no Portal ELOGA.";visibility:visible;position:fixed;top:40%;left:0;right:0;text-align:center;font:16px sans-serif}}
+
+/* Diagnóstico operacional: preenchimento rápido e itens do relatório */
+.passo{display:flex;align-items:center;gap:4px;justify-content:center}
+.passo input{width:72px;text-align:center}
+.passo .btn{min-width:34px;font-size:18px;line-height:1;padding:4px 8px}
+.esp-tabela td{vertical-align:middle}
+.itens-detalhe{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.itens-detalhe summary{cursor:pointer}
+.itens-rel{display:grid;gap:6px}
+.itens-rel .check{align-items:flex-start}
+.itens-rel .check span{font-size:var(--t-sm)}
+
+/* Redes sociais */
+.redes{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.redes a{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;color:inherit;border:1px solid currentColor;opacity:.85;transition:all var(--dur) var(--ease)}
+.redes a:hover,.redes a:focus-visible{opacity:1;transform:translateY(-2px)}
+.redes svg{width:20px;height:20px}
+.redes-auth{color:#dfff00}
+.redes-auth a{border-color:rgba(223,255,0,.45)}
+.redes-auth a:hover{background:rgba(223,255,0,.12)}
+
+/* Planilhas preenchíveis */
+.planilha-wrap{max-height:62vh;overflow:auto}
+.planilha th{position:sticky;top:0;z-index:1;white-space:nowrap}
+.planilha td{min-width:120px;padding:4px 6px;vertical-align:middle}
+.planilha td input{width:100%;min-width:110px;padding:6px 8px;border-radius:8px}
+.planilha .fixo{color:var(--muted)}
+.planilha tr.extra td{background:#fbfaff}

@@ -2,22 +2,31 @@
 import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, urlSegura } from '../core/dom.js';
 import { avisarErro, vazio, ocupado } from '../core/ui.js';
+import { abrirEditor } from './planilha-editor.js';
 
-export async function render(el) {
+export async function render(el, _p, sessao) {
   const acessos = await q(db.from('material_access').select('material_id, pode_baixar'));
-  const mats = acessos.length ? await q(db.from('materials').select('id, titulo, descricao, tipo, url, storage_path, mime').in('id', acessos.map((a) => a.material_id))) : [];
+  const mats = acessos.length ? await q(db.from('materials').select('id, titulo, descricao, tipo, url, storage_path, mime, estrutura, permite_linhas').in('id', acessos.map((a) => a.material_id))) : [];
   const pode = Object.fromEntries(acessos.map((a) => [a.material_id, a.pode_baixar]));
   montar(el, html`<div class="wrap" style="max-width:980px">
     <div class="page-head"><div><a href="#/inicio" class="small">← Início</a><h1>Materiais exclusivos</h1><p>Conteúdos liberados pela ELOGA para a sua clínica.</p></div></div>
     ${mats.length ? html`<div class="grid g2">${mats.map((m) => html`<div class="card"><h3>${m.titulo}</h3>${m.descricao ? html`<p class="small muted">${m.descricao}</p>` : ''}
       <div class="toolbar">${m.tipo === 'link' ? html`<a class="btn secondary" href="${urlSegura(m.url)}" target="_blank" rel="noopener noreferrer">Abrir link</a>`
-        : html`<button class="btn secondary" type="button" data-ver="${m.id}">Visualizar</button>${pode[m.id] ? html`<button class="btn primary" type="button" data-baixar="${m.id}">Baixar</button>` : ''}`}</div></div>`)}</div>`
+        : m.estrutura ? html`<button class="btn purple" type="button" data-preencher="${m.id}">Preencher planilha</button>${pode[m.id] ? html`<button class="btn secondary" type="button" data-baixar="${m.id}">Baixar modelo</button>` : ''}`
+        : html`<button class="btn secondary" type="button" data-ver="${m.id}">Visualizar</button>${pode[m.id] ? html`<button class="btn primary" type="button" data-baixar="${m.id}">Baixar</button>` : ''}`}</div>
+      ${m.estrutura ? html`<p class="xs muted" style="margin:8px 0 0">Planilha para preencher no portal. A cópia é só da sua clínica.</p>` : ''}</div>`)}</div>`
       : vazio('Nenhum material disponível', 'Quando a ELOGA liberar materiais, eles aparecerão aqui.')}
     <div id="leitor" style="margin-top:20px"></div></div>`);
 
+  let fecharEditor = null;
   el.addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    const m = mats.find((x) => x.id === (b.dataset.ver || b.dataset.baixar)); if (!m) return;
+    const m = mats.find((x) => x.id === (b.dataset.ver || b.dataset.baixar || b.dataset.preencher)); if (!m) return;
+    if (b.dataset.preencher) {
+      fecharEditor?.();
+      try { fecharEditor = await abrirEditor($('#leitor', el), m, { clientId: sessao.perfil.client_id, aoFechar: () => { fecharEditor = null; } }); } catch (err) { avisarErro(err); }
+      return;
+    }
     await ocupado(b, async () => {
       try {
         if (b.dataset.baixar) {
@@ -34,6 +43,7 @@ export async function render(el) {
       } catch (err) { avisarErro(err); }
     });
   });
+  return () => fecharEditor?.();
 }
 
 async function mostrar(caixa, m, blob) {

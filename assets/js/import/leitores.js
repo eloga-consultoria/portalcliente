@@ -123,6 +123,16 @@ function linhas(paginas) {
 }
 const NOTA_FIM = /(\d{1,3})\s*\/\s*1\s?0\s?0\b/;
 
+// Rodapé e chamadas do relatório do site (apresentação da ELOGA, agenda, contatos):
+// marcam o fim das respostas e nunca entram nos dados importados.
+const FIM_RESPOSTAS = /ainda n[aã]o enxerga|voc[eê] marcou\s*["“”'‘’]?n[aã]o sei|helle machado|agende seu|especializa[cç][aã]o em|fundadora|--- ?p[aá]gina|calendar\.app|consultoria\s*&|eloga\.contato|gerado a partir/i;
+
+/** Remove do texto de uma resposta o que vier do rodapé do relatório do site. */
+export function limparItem(t) {
+  const s = String(t || ''), m = FIM_RESPOSTAS.exec(s);
+  return (m ? s.slice(0, m.index) : s).replace(/\s+/g, ' ').replace(/[\s;:·•\-–—]+$/, '').trim();
+}
+
 // --------------------------------------------------------- 2a) OCR: relatório
 export function lerRelatorioOcr(paginas) {
   const r = resultadoVazio('relatorio', 'ocr');
@@ -157,6 +167,7 @@ export function lerRelatorioOcr(paginas) {
   if (iPri >= 0) {
     let atual = null, bullet = null;
     for (const l of L.slice(iPri + 1, iNs > iPri ? iNs : undefined)) {
+      if (FIM_RESPOSTAS.test(l)) break;
       const cab = /^([123])\s+(.+?)\s+(\d{1,3})\s*\/\s*1\s?0\s?0/.exec(l);
       if (cab) {
         const p = pilarPorNome(cab[2]);
@@ -168,13 +179,14 @@ export function lerRelatorioOcr(paginas) {
       if (bullet && !/^[*•·\-]/.test(l)) bullet.t = (bullet.t + ' ' + l).trim();
     }
     r.prioridades = r.prioridades.filter((p) => p.id);
+    r.prioridades.forEach((p) => p.itens.forEach((it) => { it.t = limparItem(it.t); }));
   }
 
   // O que a operação ainda não enxerga ("Não sei")
   if (iNs >= 0) {
     let ult = null;
     for (const l of L.slice(iNs + 1)) {
-      if (/agende|helle machado|este relat[oó]rio|fundadora/i.test(l)) break;
+      if (/agende|helle machado|este relat[oó]rio|fundadora|especializa[cç][aã]o em|--- ?p[aá]gina|calendar\.app/i.test(l)) break;
       const m = /^[*•·\-]\s*(.+?):\s*(.+)$/.exec(l);
       if (m && pilarPorNome(m[1], 0.55)) { ult = { pillar: pilarPorNome(m[1], 0.55).name, t: m[2].trim() }; r.nao_sei.push(ult); }
       else if (ult && !/voc[eê] marcou|achado importante|faltam dados|decidir com seguran/i.test(l)) ult.t += ' ' + l;

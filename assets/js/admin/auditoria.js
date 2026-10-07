@@ -28,13 +28,8 @@ export const ACOES = {
   'materials.criado': 'Material cadastrado', 'materials.excluido': 'Material excluído', 'material_access.criado': 'Material liberado ao cliente',
   'material_access.alterado': 'Permissão de download alterada', 'material_access.excluido': 'Material retirado do cliente', 'material.liberacoes': 'Liberações de material salvas',
   'configuracao.catalogo_salvo': 'Catálogo de programas salvo', 'app_settings.criado': 'Configuração criada', 'app_settings.alterado': 'Configuração alterada',
-  'cliente.documento_aberto': 'Cliente abriu documento', 'cliente.material_aberto': 'Cliente abriu material', 'cliente.plano_aberto': 'Cliente abriu o plano de ação', 'cliente.plano_editado': 'Cliente editou o plano de ação', 'plano.edicao_cliente': 'Edição do plano pelo cliente (liberada/retirada)', 'auditoria.exportada': 'Auditoria exportada', 'auditoria.expurgo': 'Expurgo automático (5 anos)',
+  'cliente.documento_aberto': 'Cliente abriu documento', 'cliente.material_aberto': 'Cliente abriu material', 'cliente.plano_aberto': 'Cliente abriu o plano de ação', 'cliente.plano_editado': 'Cliente editou o plano de ação', 'cliente.planilha_enviada': 'Planilha enviada ao Drive da ELOGA', 'cliente.planilha_falhou': 'Falha ao enviar planilha ao Drive', 'material_respostas.criado': 'Cliente começou a preencher planilha', 'material_respostas.excluido': 'Respostas de planilha removidas', 'plano.edicao_cliente': 'Edição do plano pelo cliente (liberada/retirada)', 'auditoria.exportada': 'Auditoria exportada', 'auditoria.expurgo': 'Expurgo automático (5 anos)',
 };
-const GRUPOS = [
-  ['', 'Todas as ações'], ['sessao.', 'Acessos e sessões'], ['acesso.', 'Gestão de acessos'], ['clients.', 'Cadastro de clientes'],
-  ['cliente.excluido_definitivo', 'Exclusões definitivas'], ['posicionamento.', 'Posicionamento'], ['self_assessments.', 'Importações'],
-  ['operational_diagnoses.', 'Diagnóstico operacional'], ['propos', 'Propostas'], ['relatorio.', 'Relatórios'], ['exportacao.', 'Exportações'], ['backup.', 'Backups'], ['cliente.', 'Acessos do cliente a conteúdos'], ['material', 'Materiais'],
-];
 export const rotuloAcao = (a) => ACOES[a] || a;
 const CRITICAS = /excluido|bloqueado|negado|falhou|expurgo|backup|exportacao|exportada/;
 
@@ -51,35 +46,38 @@ export function tabelaAuditoria(linhas, { comCliente = true } = {}) {
 }
 
 const POR_PAGINA = 100;
+// Acessos da administração exibidos na tela (as demais ações do admin continuam registradas no banco
+// por 5 anos e saem na exportação completa feita pelo backup).
+const ACESSOS_ADMIN = ['sessao.login', 'sessao.logout', 'sessao.expirada', 'sessao.senha_alterada', 'mfa.ativado', 'acesso.negado'];
 
 export async function render(el) {
-  const ini = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const filtro = { de: ini, ate: new Date().toISOString().slice(0, 10), grupo: '', cliente: '', usuario: '', pagina: 0, aba: 'eventos' };
+  const hojeIso = new Date().toISOString().slice(0, 10);
+  const filtro = { de: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), ate: hojeIso, cliente: '', email: '', pagina: 0, aba: 'clientes' };
   const desde30 = new Date(Date.now() - 30 * 86400000).toISOString();
-  const [total, criticos, exclusoes, exportacoes] = await Promise.all([
-    db.from('audit_log').select('id', { count: 'exact', head: true }).gte('at', desde30),
-    db.from('audit_log').select('id', { count: 'exact', head: true }).gte('at', desde30).or('action.like.%negado%,action.like.%falhou%,action.like.acesso.bloqueado'),
-    db.from('audit_log').select('id', { count: 'exact', head: true }).gte('at', desde30).like('action', '%excluido%'),
-    db.from('audit_log').select('id', { count: 'exact', head: true }).gte('at', desde30).or('action.like.exportacao.%,action.like.backup.%,action.eq.auditoria.exportada'),
+  const [clientes, acoesCli, acessosAdm, negados] = await Promise.all([
+    q(db.from('clients').select('id, name, access_email').order('name')),
+    db.from('audit_log').select('id', { count: 'exact', head: true }).gte('at', desde30).eq('actor_role', 'client'),
+    db.from('audit_log').select('id', { count: 'exact', head: true }).gte('at', desde30).eq('actor_role', 'admin').in('action', ACESSOS_ADMIN),
+    db.from('audit_log').select('id', { count: 'exact', head: true }).gte('at', desde30).or('action.eq.acesso.negado,action.like.%falhou%'),
   ]);
+  const emails = [...new Set(clientes.map((c) => (c.access_email || '').toLowerCase()).filter(Boolean))].sort();
+
   montar(el, html`<div class="wrap">
     <div class="page-head"><div><span class="eyebrow">Governança</span><h1>Auditoria</h1>
-      <p>Registro imutável de acessos e alterações, guardado por 5 anos. Visível somente para a administração.</p></div></div>
-    <div class="grid g4" style="margin-bottom:24px">
-      <div class="kpi accent"><div class="k-label">Eventos · 30 dias</div><div class="k-value">${total.count ?? '—'}</div></div>
-      <div class="kpi"><div class="k-label">Falhas e bloqueios</div><div class="k-value">${criticos.count ?? '—'}</div><div class="k-note">acessos negados, e-mails com falha, bloqueios</div></div>
-      <div class="kpi"><div class="k-label">Exclusões</div><div class="k-value">${exclusoes.count ?? '—'}</div></div>
-      <div class="kpi"><div class="k-label">Exportações e backups</div><div class="k-value">${exportacoes.count ?? '—'}</div></div>
+      <p>Ações dos clientes no portal e acessos da administração. O registro completo é imutável e fica guardado por 5 anos.</p></div></div>
+    <div class="grid g3" style="margin-bottom:24px">
+      <div class="kpi accent"><div class="k-label">Ações de clientes · 30 dias</div><div class="k-value">${acoesCli.count ?? '—'}</div></div>
+      <div class="kpi"><div class="k-label">Acessos da administração · 30 dias</div><div class="k-value">${acessosAdm.count ?? '—'}</div><div class="k-note">entradas, saídas e verificação em 2 etapas</div></div>
+      <div class="kpi"><div class="k-label">Falhas e acessos negados · 30 dias</div><div class="k-value">${negados.count ?? '—'}</div></div>
     </div>
     <div class="tabs" role="tablist">
-      <button class="tab" role="tab" data-aba="eventos" aria-selected="true">Eventos do portal</button>
-      <button class="tab" role="tab" data-aba="auth" aria-selected="false">Logins (Supabase Auth)</button></div>
+      <button class="tab" role="tab" data-aba="clientes" aria-selected="true">Ações dos clientes</button>
+      <button class="tab" role="tab" data-aba="admin" aria-selected="false">Acessos da administração</button></div>
     <div class="filters" id="filtros">
       <div class="field"><label for="f-de">De</label><input id="f-de" type="date" value="${filtro.de}"></div>
       <div class="field"><label for="f-ate">Até</label><input id="f-ate" type="date" value="${filtro.ate}"></div>
-      <div class="field so-eventos"><label for="f-grupo">Tipo de ação</label><select id="f-grupo">${GRUPOS.map(([v, t]) => html`<option value="${v}">${t}</option>`)}</select></div>
-      <div class="field so-eventos"><label for="f-cli">Cliente</label><input id="f-cli" type="search" placeholder="Nome da clínica"></div>
-      <div class="field"><label for="f-usu">Usuário</label><input id="f-usu" type="search" placeholder="E-mail"></div>
+      <div class="field so-clientes"><label for="f-cli">Cliente</label><select id="f-cli"><option value="">Todos os clientes</option>${clientes.map((c) => html`<option value="${c.id}">${c.name}</option>`)}</select></div>
+      <div class="field so-clientes"><label for="f-email">E-mail</label><select id="f-email"><option value="">Todos os e-mails</option>${emails.map((m) => html`<option value="${m}">${m}</option>`)}</select></div>
       <div class="field" style="flex:0 0 auto"><button class="btn secondary" type="button" id="exportar">Exportar CSV</button></div>
     </div>
     <div id="lista"></div>
@@ -90,55 +88,39 @@ export async function render(el) {
   async function carregar() {
     montar(lista, carregando());
     try {
-      if (filtro.aba === 'auth') {
-        const linhas = await q(db.rpc('admin_auth_events', { p_since: filtro.de + 'T00:00:00', p_limit: 1000 }));
-        const ate = new Date(filtro.ate + 'T23:59:59');
-        ultimo = linhas.filter((l) => new Date(l.at) <= ate && (!filtro.usuario || String(l.actor || '').toLowerCase().includes(filtro.usuario.toLowerCase())));
-        montar(lista, ultimo.length ? html`<div class="table-wrap"><table class="t"><thead><tr><th>Quando</th><th>Usuário</th><th>Evento</th><th>IP</th></tr></thead><tbody>
-          ${ultimo.map((l) => html`<tr><td class="nowrap">${fmtDataHora(l.at)}</td><td>${l.actor || '—'}</td><td>${traduzAuth(l.action)}</td><td>${l.ip || '—'}</td></tr>`)}</tbody></table></div>`
-          : vazio('Nenhum login no período'));
-        montar($('#paginacao', el), html``);
-        return;
-      }
       let cons = db.from('audit_log').select('*').gte('at', filtro.de + 'T00:00:00').lte('at', filtro.ate + 'T23:59:59')
         .order('at', { ascending: false }).range(filtro.pagina * POR_PAGINA, filtro.pagina * POR_PAGINA + POR_PAGINA);
-      if (filtro.grupo) cons = filtro.grupo.endsWith('.') || filtro.grupo === 'propos' ? cons.like('action', filtro.grupo + '%') : cons.eq('action', filtro.grupo);
-      if (filtro.cliente) cons = cons.ilike('client_name', '%' + filtro.cliente.replace(/[%_]/g, '') + '%');
-      if (filtro.usuario) cons = cons.ilike('actor_email', '%' + filtro.usuario.replace(/[%_]/g, '') + '%');
+      if (filtro.aba === 'admin') cons = cons.eq('actor_role', 'admin').in('action', ACESSOS_ADMIN);
+      else {
+        cons = cons.eq('actor_role', 'client');
+        if (filtro.cliente) cons = cons.eq('client_id', filtro.cliente);
+        if (filtro.email) cons = cons.ilike('actor_email', filtro.email.replace(/[%_]/g, ''));
+      }
       const linhas = await q(cons);
       const temMais = linhas.length > POR_PAGINA;
       ultimo = linhas.slice(0, POR_PAGINA);
-      montar(lista, tabelaAuditoria(ultimo));
+      montar(lista, tabelaAuditoria(ultimo, { comCliente: filtro.aba === 'clientes' }));
       montar($('#paginacao', el), html`<span class="small muted">Página ${filtro.pagina + 1}</span><div class="toolbar">
         <button class="btn sm secondary" type="button" id="ant" ${filtro.pagina === 0 ? html`disabled` : ''}>Anteriores</button>
         <button class="btn sm secondary" type="button" id="prox" ${temMais ? '' : html`disabled`}>Mais antigos</button></div>`);
       $('#ant', el)?.addEventListener('click', () => { filtro.pagina--; carregar(); });
       $('#prox', el)?.addEventListener('click', () => { filtro.pagina++; carregar(); });
-    } catch (e) { avisarErro(e); montar(lista, vazio('Não foi possível carregar a auditoria', 'Confirme que as migrations foram aplicadas.')); }
+    } catch (e) { avisarErro(e); montar(lista, vazio('Não foi possível carregar a auditoria', 'Tente novamente em instantes.')); }
   }
   const recarregar = debounce(() => { filtro.pagina = 0; carregar(); }, 350);
-  const ligar = (id, k) => $(id, el).addEventListener('input', (e) => { filtro[k] = e.target.value; recarregar(); });
-  ligar('#f-de', 'de'); ligar('#f-ate', 'ate'); ligar('#f-grupo', 'grupo'); ligar('#f-cli', 'cliente'); ligar('#f-usu', 'usuario');
+  const ligar = (id, k) => $(id, el).addEventListener(id.startsWith('#f-d') || id === '#f-ate' ? 'input' : 'change', (e) => { filtro[k] = e.target.value; recarregar(); });
+  ligar('#f-de', 'de'); ligar('#f-ate', 'ate'); ligar('#f-cli', 'cliente'); ligar('#f-email', 'email');
   el.querySelectorAll('[data-aba]').forEach((b) => b.addEventListener('click', () => {
-    filtro.aba = b.dataset.aba;
+    filtro.aba = b.dataset.aba; filtro.pagina = 0;
     el.querySelectorAll('[data-aba]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
-    el.querySelectorAll('.so-eventos').forEach((x) => x.classList.toggle('hidden', filtro.aba === 'auth'));
+    el.querySelectorAll('.so-clientes').forEach((x) => x.classList.toggle('hidden', filtro.aba !== 'clientes'));
     carregar();
   }));
   $('#exportar', el).addEventListener('click', (e) => ocupado(e.currentTarget, async () => {
-    const linhas = filtro.aba === 'auth'
-      ? ultimo.map((l) => ({ Quando: fmtDataHora(l.at), Usuario: l.actor, Evento: traduzAuth(l.action), IP: l.ip }))
-      : ultimo.map((l) => ({ Quando: fmtDataHora(l.at), Usuario: l.actor_email || 'Sistema', Papel: l.actor_role, Acao: rotuloAcao(l.action), Codigo: l.action,
-          Cliente: l.client_name, IP: l.ip, Detalhes: JSON.stringify(l.details) }));
-    baixar(csv(linhas), `ELOGA_Auditoria_${filtro.de}_a_${filtro.ate}.csv`);
+    const linhas = ultimo.map((l) => ({ Quando: fmtDataHora(l.at), Usuario: l.actor_email || 'Sistema', Papel: l.actor_role, Acao: rotuloAcao(l.action), Codigo: l.action,
+      Cliente: l.client_name, IP: l.ip, Detalhes: JSON.stringify(l.details) }));
+    baixar(csv(linhas), `ELOGA_Auditoria_${filtro.aba === 'admin' ? 'acessos_admin' : 'clientes'}_${filtro.de}_a_${filtro.ate}.csv`);
     await registrar('auditoria.exportada', { detalhes: { de: filtro.de, ate: filtro.ate, registros: linhas.length, aba: filtro.aba } });
   }));
   carregar();
-}
-
-function traduzAuth(a) {
-  return ({ login: 'Login', logout: 'Logout', token_refreshed: 'Sessão renovada', token_revoked: 'Sessão revogada', user_modified: 'Usuário alterado',
-    user_recovery_requested: 'Pedido de recuperação de senha', user_signedup: 'Usuário criado', user_deleted: 'Usuário excluído',
-    user_updated_password: 'Senha alterada', mfa_code_login: 'Login com MFA', factor_in_progress: 'MFA em cadastro', verification_attempted: 'Verificação MFA',
-    user_invited: 'Convite enviado', user_confirmation_requested: 'Confirmação solicitada' })[a] || a;
 }
