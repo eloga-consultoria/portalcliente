@@ -184,6 +184,7 @@
   #impressao .doc *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   #impressao .doc .foot{display:none}
   #impressao .pb{break-before:auto}
+  #impressao .quebra{break-before:page}
   #impressao .avoid,#impressao .opt,#impressao tr,#impressao .callout{break-inside:avoid}
   #impressao h2,#impressao h3,#impressao h4{break-after:avoid}
   #impressao p,#impressao li{orphans:3;widows:3}

@@ -16,7 +16,7 @@ function ed(state, chave, padrao) {
   return html`<span class="editable" contenteditable="true" data-ed="${chave}">${v != null ? v : padrao}</span>`;
 }
 
-function capa(titulo1, titulo2, cliente, logo, meta) {
+export function capa(titulo1, titulo2, cliente, logo, meta) {
   return html`<div class="cover">
     <div class="logos"><div class="brand brand-img"><img src="assets/img/eloga-marca-clara.png" alt="ELOGA"><small>Consultoria &amp; Estratégias em Saúde</small></div>
       ${logo ? html`<span class="x brand-img">×</span><img class="logo-cliente" src="${logo}" alt="Logo ${cliente.name}">` : ''}</div>

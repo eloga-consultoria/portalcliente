@@ -1,6 +1,7 @@
 // PROGRAMAS E PREÇOS: catálogo usado na proposta, editável pela administração e salvo no banco.
 import { db, q, registrar } from '../core/api.js';
-import { html, montar, $, $$ } from '../core/dom.js';
+import { html, montar, $, $$, imprimirDocumento } from '../core/dom.js';
+import { materialComercialHtml } from '../reports/material-comercial.js';
 import { avisar, avisarErro, confirmar, ocupado } from '../core/ui.js';
 import { CATALOG, CATALOGO_PADRAO, FRONT_KEYS, FORMATOS_BASE, COBRANCA_FORMATO, aplicarCatalogo } from './operacional-modelo.js';
 import { carregarCatalogo } from './catalogo.js';
@@ -16,7 +17,9 @@ export async function render(el) {
   const desenhar = () => montar(el, html`<div class="wrap" style="max-width:1080px">
     <div class="page-head"><div><span class="eyebrow">Configurações</span><h1>Programas e preços</h1>
       <p>O que você salvar aqui passa a valer nas próximas propostas. Propostas já emitidas não mudam.</p></div>
-      <div class="toolbar"><button class="btn ghost" type="button" data-acao="padrao">Restaurar padrão</button><button class="btn primary" type="button" data-acao="salvar">Salvar catálogo</button></div></div>
+      <div class="toolbar"><label class="check small"><input type="checkbox" id="mc-precos" checked> Com valores</label>
+        <button class="btn secondary" type="button" data-acao="material">Material comercial (PDF)</button>
+        <button class="btn ghost" type="button" data-acao="padrao">Restaurar padrão</button><button class="btn primary" type="button" data-acao="salvar">Salvar catálogo</button></div></div>
 
     <div class="card" style="margin-bottom:16px"><div class="card-head"><div><h2>Programas</h2><p>Formatos oferecidos na proposta.</p></div>
       <button class="btn sm purple" type="button" data-acao="novo">+ Novo programa</button></div>
@@ -103,6 +106,14 @@ export async function render(el) {
     }
     if (b.dataset.acao === 'novo-bonus') { cat = ler(); cat.bonus['b_' + Date.now().toString(36)] = { name: 'Novo bônus', chamada: '', valor: 0, desc: '', items: [] }; desenhar();
       el.querySelector('[data-bonus]:last-of-type')?.setAttribute('open', ''); return; }
+    if (b.dataset.acao === 'material') {
+      const precos = $('#mc-precos', el)?.checked !== false;
+      const doc = document.createElement('div'); doc.className = 'doc';
+      montar(doc, materialComercialHtml(ler(), { precos }));
+      imprimirDocumento(doc, 'ELOGA_Programas_e_Solucoes' + (precos ? '' : '_sem_valores'));
+      registrar('configuracao.material_comercial', { detalhes: { com_valores: precos } });
+      return;
+    }
     if (b.dataset.acao === 'novo') { cat = ler(); cat.formats['p_' + Date.now().toString(36)] = { name: 'Novo programa', cobranca: 'unico', unit: 'único', price: 0, desc: '', items: [] }; desenhar(); return; }
     if (b.dataset.acao === 'padrao') {
       if (!(await confirmar('Restaurar o catálogo padrão?', 'Os valores voltam aos do modelo original. Só é gravado ao clicar em “Salvar catálogo”.', { rotulo: 'Restaurar' }))) return;
