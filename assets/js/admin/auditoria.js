@@ -27,7 +27,7 @@ export const ACOES = {
   'plano.criado': 'Plano de ação criado', 'action_plans.criado': 'Plano de ação criado', 'action_plans.excluido': 'Plano de ação removido',
   'materials.criado': 'Material cadastrado', 'materials.excluido': 'Material excluído', 'material_access.criado': 'Material liberado ao cliente',
   'material_access.alterado': 'Permissão de download alterada', 'material_access.excluido': 'Material retirado do cliente', 'material.liberacoes': 'Liberações de material salvas',
-  'configuracao.catalogo_salvo': 'Catálogo de programas salvo', 'configuracao.material_comercial': 'Material comercial exportado', 'app_settings.criado': 'Configuração criada', 'app_settings.alterado': 'Configuração alterada',
+  'configuracao.catalogo_salvo': 'Catálogo de programas salvo', 'configuracao.material_comercial': 'Material comercial exportado', 'proposta.prazo_alterado': 'Data/validade da proposta alterada', 'app_settings.criado': 'Configuração criada', 'app_settings.alterado': 'Configuração alterada',
   'cliente.documento_aberto': 'Cliente abriu documento', 'cliente.material_aberto': 'Cliente abriu material', 'cliente.plano_aberto': 'Cliente abriu o plano de ação', 'cliente.plano_editado': 'Cliente editou o plano de ação', 'cliente.planilha_enviada': 'Planilha enviada ao Drive da ELOGA', 'cliente.planilha_falhou': 'Falha ao enviar planilha ao Drive', 'material_respostas.criado': 'Cliente começou a preencher planilha', 'material_respostas.excluido': 'Respostas de planilha removidas', 'plano.edicao_cliente': 'Edição do plano pelo cliente (liberada/retirada)', 'auditoria.exportada': 'Auditoria exportada', 'auditoria.expurgo': 'Expurgo automático (5 anos)',
 };
 export const rotuloAcao = (a) => ACOES[a] || a;

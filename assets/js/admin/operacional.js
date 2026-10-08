@@ -341,8 +341,9 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
     return html`<div class="stack">
       <div class="card no-print"><div class="card-head"><div><h2>Montagem da proposta</h2><p>Documento separado do relatório. Ao emitir, a proposta recebe número e fica registrada sem alterações.</p></div></div>
         <div class="grid g3" style="margin-bottom:12px">
-          <div class="field"><label>Data de emissão</label><input type="date" data-k="proposal.date" value="${P.date}" ${emitidaAtual ? html`disabled` : ''}></div>
-          <div class="field"><label>Validade (dias corridos)</label><input type="number" min="1" data-k="proposal.validity" data-num value="${P.validity}" ${emitidaAtual ? html`disabled` : ''}></div>
+          <div class="field"><label>Data de emissão</label><input type="date" data-k="proposal.date" data-prazo-prop value="${P.date}"></div>
+          <div class="field"><label>Validade (dias corridos)</label><input type="number" min="1" max="365" data-k="proposal.validity" data-num data-prazo-prop value="${P.validity}">
+            <span class="hint">Válida até ${fmtData(somarDias(P.date, P.validity))}${emitidaAtual ? ' · altera também a proposta emitida' : ''}</span></div>
           <div class="field"><label>Nº da proposta</label><input type="text" value="${P.code || 'gerado ao emitir'}" disabled></div></div>
         <div class="grid g2">${editorOpcoes()}</div>
         <div class="grid g2" style="margin-top:12px">
@@ -428,6 +429,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       }
       if (t.dataset.opSistema) { state.proposal.options[+t.dataset.opSistema].system = t.checked; mudou(); redesenhar(); }
       if (t.dataset.opRec) { state.proposal.options.forEach((x, i) => { x.recommended = i === +t.dataset.opRec; }); mudou(); redesenhar(); }
+      if (t.hasAttribute('data-prazo-prop')) { await ajustarPrazoEmitida(); redesenhar(); return; }
       if (t.dataset.statusProposta) {
         try {
           await q(db.from('proposals').update({ status: t.value }).eq('id', t.dataset.statusProposta));
@@ -507,6 +509,24 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       registro = await q(db.from('operational_diagnoses').update({ report_issued_at: new Date().toISOString(), status: 'completed' }).eq('id', registro.id).select().single());
       await subirEtapa(cliente, 'relatorio_emitido');
       registrar('relatorio.pdf_gerado', { entidade: 'operational_diagnoses', id: registro.id, cliente: cliente.id });
+    }
+
+    // Data de emissão e validade podem ser corrigidas mesmo depois de emitida (o conteúdo continua congelado)
+    async function ajustarPrazoEmitida() {
+      const P = state.proposal;
+      if (!P.date || !(+P.validity >= 1)) return;
+      const em = P.code && emitidas.find((x) => x.code === P.code);
+      if (!em) return;
+      const validade = somarDias(P.date, P.validity);
+      if (String(em.issued_at).slice(0, 10) === P.date && String(em.valid_until).slice(0, 10) === validade) return;
+      try {
+        const snapshot = structuredClone(em.snapshot || {});
+        snapshot.proposal = { ...(snapshot.proposal || {}), date: P.date, validity: +P.validity };
+        await q(db.from('proposals').update({ issued_at: P.date, valid_until: validade, snapshot }).eq('id', em.id));
+        Object.assign(em, { issued_at: P.date, valid_until: validade, snapshot });
+        registrar('proposta.prazo_alterado', { entidade: 'proposals', id: em.id, cliente: cliente.id, detalhes: { codigo: em.code, emissao: P.date, validade } });
+        avisar(`Proposta ${em.code}: emissão ${fmtData(P.date)}, válida até ${fmtData(validade)}.`, 'ok');
+      } catch (err) { avisarErro(err); }
     }
 
     async function emitirProposta() {

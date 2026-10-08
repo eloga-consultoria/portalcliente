@@ -111,3 +111,19 @@ select count(*) as copias_visiveis_b from public.material_respostas;
 insert into public.material_respostas(material_id, client_id, dados) values ('30000000-0000-0000-0000-00000000000a','10000000-0000-0000-0000-00000000000b','{"abas":[]}');
 select count(*) as copias_visiveis_b from public.material_respostas;
 reset role;
+
+-- ===================== 009: data e validade da proposta emitida
+\echo '--- 009: ajustar data e validade da proposta emitida (deve funcionar)'
+do $$ declare p uuid; begin
+  insert into public.proposals (client_id, code, issued_at, valid_until, snapshot)
+    select id, 'TESTE-009', current_date, current_date + 15, '{"proposal":{"date":"2026-01-01","validity":15},"x":1}'::jsonb from public.clients limit 1 returning id into p;
+  update public.proposals set issued_at = current_date - 1, valid_until = current_date + 30,
+    snapshot = jsonb_set(jsonb_set(snapshot, '{proposal,date}', '"2026-01-02"'), '{proposal,validity}', '30') where id = p;
+  raise notice 'ok: data e validade alteradas';
+  begin
+    update public.proposals set snapshot = jsonb_set(snapshot, '{x}', '2') where id = p;
+    raise exception 'FALHOU: conteúdo da proposta foi alterado';
+  exception when insufficient_privilege then raise notice 'ok: conteúdo continua travado';
+  end;
+  delete from public.proposals where id = p;
+end $$;

@@ -92,6 +92,12 @@ await abaCliente('proposta', '11-proposta', async () => {
   await page.click('[data-acao="emitir-proposta"]'); await confirmarModal('Emitir e gerar PDF');
   await page.waitForSelector('text=ELG-2026-001', { timeout: 8000 });
 });
+await passo('11b-proposta-prazo', async () => {
+  await page.fill('[data-k="proposal.validity"]', '30'); await page.locator('[data-k="proposal.validity"]').dispatchEvent('change');
+  await page.waitForFunction(() => document.body.textContent.includes('Data/validade') || [...document.querySelectorAll('.toast, [role=status]')].some((x) => /válida até/.test(x.textContent)), null, { timeout: 8000 });
+  const p = banco.proposals.find((x) => x.code === 'ELG-2026-001');
+  if (!p || p.snapshot?.proposal?.validity !== 30 || !p.valid_until) throw new Error('validade não gravada na proposta emitida');
+});
 await abaCliente('visao', '12-visao-geral', async () => {
   await page.fill('#ac-email', 'cliente@clinica-teste.com.br'); await page.click('#f-acesso [type=submit]');
   await page.waitForSelector('.secret'); await page.screenshot({ path: `${SAIDA}/12b-senha.png` }); await confirmarModal('Concluído');
