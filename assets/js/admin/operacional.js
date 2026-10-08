@@ -7,6 +7,7 @@ import { avisar, avisarErro, confirmar, ocupado } from '../core/ui.js';
 import { COBRANCA_EXTRA, CATALOG, FRONT_KEYS, QB, QC, QD, CRIT, PH, estadoPadrao, mesclar, num, candidatas, sc, avaliar, semearOpcoes, somarDias,
   DIAS, ESPECIALIDADES, COBRANCAS, SISTEMAS, NIVEL_SISTEMA, capacidade, recorrente, usaFrentes, normalizarEstado, especialidadesDe } from './operacional-modelo.js';
 import { carregarCatalogo } from './catalogo.js';
+import { gerarRecomendacoes } from './recomendacoes.js';
 import { brl } from '../core/dom.js';
 import { relatorioHtml, propostaHtml, SECOES_RELATORIO, secaoAtiva, SECOES_PROPOSTA, secaoPropostaAtiva } from '../reports/documentos-operacionais.js';
 
@@ -107,14 +108,15 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
 
   function caixaCapacidade() {
     const c = capacidade(state.session.ctx);
-    if (!c) return html`<div class="notice info">Informe a duração, as salas e os profissionais (no geral ou por especialidade) para calcular a capacidade.</div>`;
+    if (!c) return html`<div class="notice info">Informe a duração, as salas e os profissionais (total da clínica ou por especialidade) para calcular a capacidade.</div>`;
     const n = (v) => Number(v).toLocaleString('pt-BR');
     return html`<div class="grid g4">
       <div class="kpi accent"><div class="k-label">Por horário</div><div class="k-value">${n(c.porHorario)}</div><div class="k-note" style="color:#a9bcc6">${c.modo === 'especialidade'
         ? `${c.profissionais} profissional(is) por especialidade${c.salas ? `, ${c.salas} sala(s)` : ''}` : `menor entre ${c.salas} sala(s) e ${c.profissionais} profissional(is) × ${c.simultaneos}`}</div></div>
       <div class="kpi"><div class="k-label">Por semana</div><div class="k-value">${n(c.semanal)}</div><div class="k-note">${c.diasAbertos} dia(s) de atendimento</div></div>
       <div class="kpi"><div class="k-label">Por mês</div><div class="k-value">${n(c.mensal)}</div><div class="k-note">média de 4,33 semanas</div></div>
-      <div class="kpi"><div class="k-label">Ocupação atual</div><div class="k-value">${c.ocupacao === null ? '—' : c.ocupacao + '%'}</div><div class="k-note">${c.ocupacao === null ? 'informe os atendimentos/mês' : 'realizados ÷ capacidade'}</div></div></div>
+      <div class="kpi"><div class="k-label">Ocupação atual · ideal ${c.ocupacaoIdeal}%</div><div class="k-value">${c.ocupacao === null ? '—' : c.ocupacao + '%'}</div><div class="k-note">${c.ocupacao === null ? 'informe os atendimentos/mês'
+        : c.lacuna > 0 ? `faltam ${n(c.lacuna)} atend./mês para o ideal` : c.lacuna < 0 ? 'acima do ideal: pouca folga para reposições' : 'no ideal'}</div></div></div>
       <p class="small" style="margin:10px 0 0"><b>Gargalo:</b> ${c.gargalo === 'sem_salas' ? 'informe as salas para ver o gargalo.' : c.gargalo === 'equilibrado' ? 'salas e profissionais equilibrados.' : c.gargalo === 'salas' ? `salas (${c.ociosos} profissional(is) sem sala no mesmo horário). Com +1 sala: +${n(c.ganhoMensal)} atendimentos/mês.` : `profissionais (${c.ociosos} sala(s) ociosa(s) por horário). Com +1 profissional: +${n(c.ganhoMensal)} atendimentos/mês.`}
       ${c.receitaPotencial ? html` · <b>Receita potencial:</b> ${brl(c.receitaPotencial)}/mês${c.receitaOciosa ? html` · <b>Capacidade ociosa:</b> ${brl(c.receitaOciosa)}/mês` : ''}` : ''}</p>`;
   }
@@ -128,7 +130,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
   function contexto() {
     const x = state.session.ctx;
     const esps = especialidadesDe(x);
-    const porEsp = capacidade(x)?.modo === 'especialidade' || esps.length > 0;
+    const porEsp = capacidade(x)?.modo === 'especialidade';
     return html`<div class="card"><div class="card-head"><div><h3>A · Contexto da operação</h3><p>Toque nas opções; digite só números.</p></div></div>
       <h4 class="label" style="margin:4px 0 8px">Funcionamento</h4>
       <div class="table-wrap"><table class="t"><thead><tr><th>Dia</th><th>Abre</th><th>Fecha</th><th>Intervalo (início)</th><th>Intervalo (fim)</th></tr></thead><tbody>
@@ -142,17 +144,23 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         ${numero('session.ctx.duracao', 'Duração do atendimento (min)')}
         <div class="field"><label>Formato</label>${seg('session.ctx.modalidade', [['individual', 'Individual'], ['grupo', 'Em grupo'], ['misto', 'Misto']])}</div>
         ${numero('session.ctx.salas', 'Salas de atendimento')}
-        ${porEsp ? '' : html`${numero('session.ctx.simultaneos', 'Pacientes por sala no mesmo horário', 'min="1"')}${numero('session.ctx.profissionais', 'Profissionais de atendimento')}`}
         ${numero('session.ctx.administrativos', 'Equipe administrativa')}
         ${numero('session.ctx.atendimentosMes', 'Atendimentos realizados/mês')}
+        ${numero('session.ctx.ocupacaoIdeal', 'Ocupação ideal (%)', 'max="100"')}
       </div>
       <h4 class="label" style="margin:16px 0 8px">Especialidades</h4>
       <div class="chips">${ESPECIALIDADES.map((e) => chip('session.ctx.especialidades', e))}</div>
       <input type="text" style="margin-top:8px" data-k="session.ctx.especialidadesOutras" data-redesenhar value="${x.especialidadesOutras}" placeholder="Outras especialidades (separe por vírgula)">
-      ${esps.length ? html`<div class="table-wrap" style="margin-top:12px"><table class="t esp-tabela"><thead><tr><th>Especialidade</th><th style="text-align:center">Nº de profissionais</th><th style="text-align:center">Atendimentos simultâneos por profissional</th></tr></thead><tbody>
-        ${esps.map((e) => html`<tr><td><b>${e}</b></td>
-          <td>${passo(`session.ctx.esp.${e}.prof`, 0)}</td><td>${passo(`session.ctx.esp.${e}.simult`, 1)}</td></tr>`)}</tbody></table></div>
-        <p class="xs muted" style="margin:6px 0 0">As salas são compartilhadas entre as especialidades. Ex.: ABA com 2 profissionais atendendo 2 pacientes ao mesmo tempo = 4 atendimentos por horário.</p>` : ''}
+      <h4 class="label" style="margin:16px 0 8px">Equipe de atendimento</h4>
+      <div class="esp-linhas">
+        <div class="esp-linha geral"><div class="esp-nome"><b>Total da clínica</b><span class="xs muted">${porEsp ? 'usado quando o detalhamento abaixo estiver vazio' : 'preenchimento geral'}</span></div>
+          <div class="esp-campo"><span>Profissionais</span>${passo('session.ctx.profissionais', 0)}</div>
+          <div class="esp-campo"><span>Atendimentos simultâneos</span>${passo('session.ctx.simultaneos', 1)}</div></div>
+        ${esps.length ? html`<p class="xs muted" style="margin:10px 0 4px"><b>Detalhar por especialidade (opcional).</b> Quando preenchido, o cálculo usa este detalhamento; as salas são compartilhadas.</p>
+          ${esps.map((e) => html`<div class="esp-linha"><div class="esp-nome"><b>${e}</b></div>
+            <div class="esp-campo"><span>Profissionais</span>${passo(`session.ctx.esp.${e}.prof`, 0)}</div>
+            <div class="esp-campo"><span>Atendimentos simultâneos</span>${passo(`session.ctx.esp.${e}.simult`, 1)}</div></div>`)}` : ''}
+      </div>
       <div id="caixa-capacidade" style="margin:16px 0 20px">${caixaCapacidade()}</div>
       <h4 class="label" style="margin:18px 0 8px">Fonte de receita (% aproximado)</h4>
       <div class="grid g3">${numero('session.ctx.mix.convenio', 'Convênio %')}${numero('session.ctx.mix.particular', 'Particular %')}${numero('session.ctx.mix.liminar', 'Liminar %')}</div>
@@ -165,6 +173,15 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       <div class="grid g4">${SISTEMAS.map(([k, r]) => html`<div class="field"><label>${r}</label>${seg('session.ctx.sistemas.' + k, NIVEL_SISTEMA)}</div>`)}</div>
       <div class="field" style="margin-top:16px"><label>Observações de contexto</label><textarea rows="2" data-k="session.ctx.observacoes">${x.observacoes}</textarea></div>
     </div>`;
+  }
+
+  // Campos adicionais vinculados a um pilar (pilar '' = sem pilar explorado)
+  function camposExtras(k) {
+    const lista = state.session.extras.map((c, i) => [c, i]).filter(([c]) => (k ? c.pilar === k : !state.session.fronts.includes(c.pilar)));
+    return lista.map(([c, i]) => html`<div class="grid campo-extra" style="grid-template-columns:1fr 2fr auto;gap:8px;align-items:end;margin:0 0 8px 34px">
+      <div class="field"><label>Título</label><input type="text" maxlength="120" data-k="session.extras.${i}.titulo" value="${c.titulo}" placeholder="Ex.: Lista de espera"></div>
+      <div class="field"><label>Informação</label><textarea rows="1" maxlength="2000" data-k="session.extras.${i}.valor" placeholder="Ex.: 23 pacientes aguardando ABA">${c.valor}</textarea></div>
+      <button type="button" class="btn sm ghost" data-remover-campo="${i}" aria-label="Remover campo">Remover</button></div>`);
   }
 
   function sessao() {
@@ -180,21 +197,16 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         <p class="small muted">Selecione as frentes exploradas (sugestão: as 2 menores notas do autodiagnóstico, em roxo).</p>
         <div class="chips" style="margin-bottom:10px">${FRONT_KEYS.map((k) => html`<button type="button" class="chip ${state.session.fronts.includes(k) ? 'on' : ''}" data-frente="${k}" aria-pressed="${state.session.fronts.includes(k)}" style="${candidatas(state).includes(k) && !state.session.fronts.includes(k) ? 'border-color:var(--purple);color:var(--purple)' : ''}">${CATALOG.fronts[k].name}${num(state.auto.pillars[k]) !== null ? ' · ' + state.auto.pillars[k] : ''}</button>`)}</div>
         ${state.session.fronts.length ? state.session.fronts.map((k) => { if (!state.session.B[k]) state.session.B[k] = QB[k].map(() => '');
-          return html`<div style="margin:6px 0 14px"><h4 style="margin:10px 0 4px;color:var(--purple)">${CATALOG.fronts[k].name}</h4>${QB[k].map((p, i) => campoTexto(i + 1, p, `session.B.${k}.${i}`))}</div>`; })
+          return html`<div style="margin:6px 0 14px"><h4 style="margin:10px 0 4px;color:var(--purple)">${CATALOG.fronts[k].name}</h4>${QB[k].map((p, i) => campoTexto(i + 1, p, `session.B.${k}.${i}`))}
+            ${camposExtras(k)}<button class="btn sm secondary" type="button" data-mais-campo="${k}">+ Adicionar campo em ${CATALOG.fronts[k].name}</button></div>`; })
           : html`<p class="muted"><i>Nenhuma frente selecionada.</i></p>`}</div>
       <div class="card"><h3>C · Dados disponíveis <span class="badge purple">define o formato</span></h3>
         ${QC.map((p, i) => html`<div class="op-q"><div class="qt"><span class="qn">${i + 1}</span>${p}</div><div style="margin-bottom:6px">${seg(`session.C.${i}.v`, [['sim', 'Sim'], ['parcial', 'Parcial'], ['nao', 'Não']])}</div>
           <input type="text" data-k="session.C.${i}.n" value="${state.session.C[i].n}" placeholder="Detalhe (sistema, período disponível, quem registra)"></div>`)}</div>
       <div class="card"><h3>D · Decisão</h3>${QD.map((x, i) => campoTexto(i + 1, x.q, `session.D.${x.k}`))}
         <div class="op-q"><div class="qt"><span class="qn">✓</span>O decisor participou da sessão?</div>${seg('session.D.decisorPresent', [['sim', 'Sim'], ['nao', 'Não']])}</div></div>
-      <div class="card"><div class="card-head"><div><h3>Campos adicionais</h3><p>Registre informações que não estão no roteiro. Marque as que devem entrar no relatório.</p></div></div>
-        ${state.session.extras.length ? state.session.extras.map((c, i) => html`<div class="grid campo-extra" style="grid-template-columns:1fr 2fr auto auto;gap:8px;align-items:end;margin-bottom:8px">
-          <div class="field"><label>Título</label><input type="text" maxlength="120" data-k="session.extras.${i}.titulo" value="${c.titulo || ''}" placeholder="Ex.: Lista de espera"></div>
-          <div class="field"><label>Informação</label><textarea rows="1" maxlength="2000" data-k="session.extras.${i}.valor" placeholder="Ex.: 23 pacientes aguardando ABA">${c.valor || ''}</textarea></div>
-          <label class="check" style="margin-bottom:10px"><input type="checkbox" data-chk="session.extras.${i}.on" ${c.on !== false ? html`checked` : ''}> No relatório</label>
-          <button type="button" class="btn sm ghost" data-remover-campo="${i}" aria-label="Remover campo">Remover</button></div>`)
-          : html`<p class="muted small">Nenhum campo adicional.</p>`}
-        <button class="btn sm secondary" type="button" data-acao="mais-campo">+ Adicionar campo</button></div>
+      ${state.session.extras.some((c) => !state.session.fronts.includes(c.pilar)) ? html`<div class="card"><div class="card-head"><div><h3>Outros campos</h3>
+        <p>Campos de pilares não explorados ou criados antes da vinculação por pilar. Aparecem em “Informações complementares”.</p></div></div>${camposExtras('')}</div>` : ''}
       <div class="card"><h3>Encerramento</h3><div class="grid g2">
         <div class="field"><label>Data e horário da devolutiva (20 min)</label><input type="text" data-k="session.devolutiva" value="${state.session.devolutiva}" placeholder="ex.: 06/10 às 14h"></div>
         <div class="field"><label>Anotações livres</label><textarea data-k="session.freeNotes">${state.session.freeNotes}</textarea></div></div></div>
@@ -233,9 +245,11 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
           <div class="field"><label>Impacto estimado (R$ ou %)</label><input type="text" data-k="matrix.findings.${i}.i" value="${f.i}"></div>
           <div>${state.matrix.findings.length > 3 ? html`<button type="button" class="btn sm ghost" data-remover-achado="${i}" aria-label="Remover achado ${i + 1}">Remover</button>` : ''}</div></div>`)}
         <button class="btn sm secondary" type="button" data-acao="mais-achado" ${state.matrix.findings.length >= 5 ? html`disabled` : ''}>+ Achado</button></div>
-      <div class="card"><h3>Recomendações imediatas <span class="badge purple">o cliente aplica sozinho</span></h3>
+      <div class="card"><div class="card-head"><div><h3>Recomendações imediatas <span class="badge purple">o cliente inicia sozinho</span></h3>
+        <p>Use <b>Gerar recomendações</b> para criar textos técnicos a partir dos pilares, da matriz e do formato recomendado, já vinculados ao serviço da ELOGA. Tudo pode ser editado.</p></div>
+        <button class="btn sm purple" type="button" data-acao="gerar-rec">Gerar recomendações</button></div>
         ${state.matrix.quickwins.map((x, i) => html`<div class="grid" style="grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:8px">
-          <div class="field"><label>Recomendação ${i + 1}</label><input type="text" data-k="matrix.quickwins.${i}.t" value="${x.t}"></div>
+          <div class="field"><label>Recomendação ${i + 1}</label><textarea rows="2" maxlength="1200" data-k="matrix.quickwins.${i}.t">${x.t}</textarea></div>
           <button type="button" class="btn sm ghost" data-remover-rec="${i}" aria-label="Remover recomendação ${i + 1}">Remover</button></div>`)}
         <button class="btn sm secondary" type="button" data-acao="mais-rec">+ Adicionar recomendação</button></div>
       <div class="card"><h3>Objetivo do cliente</h3><div class="grid g2">
@@ -245,22 +259,12 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
   }
 
   // ------------------------------------------------------------ RELATÓRIO
-  function itensRelatorio() {
-    const grupo = (titulo, itens) => (itens.length ? html`<div style="margin-top:12px"><p class="label" style="margin:0 0 6px">${titulo}</p>
-      <div class="itens-rel">${itens.map(([cam, texto, on]) => html`<label class="check"><input type="checkbox" data-chk="${cam}" ${on ? html`checked` : ''}> <span>${texto}</span></label>`)}</div></div>` : '');
-    return html`<details class="itens-detalhe" open><summary class="small"><b>Itens incluídos</b> · desmarque o que não deve aparecer</summary>
-      ${grupo('Principais achados', state.matrix.findings.map((f, i) => [`matrix.findings.${i}.on`, f.t, f.on !== false]).filter(([, t]) => t.trim()))}
-      ${grupo('Recomendações imediatas', state.matrix.quickwins.map((x, i) => [`matrix.quickwins.${i}.on`, x.t, x.on !== false]).filter(([, t]) => t.trim()))}
-      ${grupo('Campos adicionais', state.session.extras.map((c, i) => [`session.extras.${i}.on`, [c.titulo, c.valor].filter(Boolean).join(': '), c.on !== false]).filter(([, t]) => t.trim()))}
-      ${!state.matrix.findings.some((f) => f.t.trim()) && !state.matrix.quickwins.some((x) => x.t.trim()) && !state.session.extras.length ? html`<p class="xs muted" style="margin:8px 0 0">Ainda não há achados, recomendações ou campos adicionais preenchidos.</p>` : ''}</details>`;
-  }
-
   function relatorio() {
     return html`<div class="area-doc">
       <div class="card tight no-print" style="margin-bottom:12px"><div class="card-head" style="margin-bottom:8px"><div><h3 style="margin:0">Seções do relatório</h3>
-        <p>Desmarque o que não deve entrar no PDF. Os textos com contorno podem ser editados direto no documento.</p></div></div>
-        <div class="chips">${SECOES_RELATORIO.map(([id, nome]) => html`<label class="chip"><input type="checkbox" data-secao="${id}" ${secaoAtiva(state, id) ? html`checked` : ''}>${nome}</label>`)}</div>
-        ${itensRelatorio()}</div>
+        <p>Desmarque a seção que não deve entrar no PDF. No documento, cada item tem a sua caixa ☑ (desmarcado = fica fora do PDF) e todos os textos podem ser editados com um clique.</p></div>
+        <button class="btn sm ghost" type="button" data-acao="restaurar-textos">Restaurar textos automáticos</button></div>
+        <div class="chips">${SECOES_RELATORIO.map(([id, nome]) => html`<label class="chip"><input type="checkbox" data-secao="${id}" ${secaoAtiva(state, id) ? html`checked` : ''}>${nome}</label>`)}</div></div>
       <div class="toolbar no-print" style="margin-bottom:12px"><span class="small muted" style="margin-right:auto">Confira o documento antes de gerar o PDF.
         ${registro?.report_issued_at ? html`<br>Último PDF gerado em ${fmtDataHora(registro.report_issued_at)}.` : ''}</span>
         <button class="btn secondary" type="button" data-acao="atualizar-doc">Atualizar com os dados</button>
@@ -359,12 +363,14 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         if (t.hasAttribute('data-ctx')) { const cx = $('#caixa-capacidade', el); if (cx) montar(cx, caixaCapacidade()); }
         if (aba === 'preparacao' && /auto\.pillars/.test(t.dataset.k)) { /* candidatas mudam: redesenha ao sair do campo */ } }
       if (t.dataset.ed) { state.report.edits[t.dataset.ed] = t.innerText; mudou(); }
+      if (t.dataset.edk) { set(t.dataset.edk, t.innerText.trim()); mudou(); }
       if (t.dataset.preco) { const [i, k] = t.dataset.preco.split('|'); state.proposal.options[+i].prices[k] = t.value; mudou(); }
       if (t.dataset.opMeses) { state.proposal.options[+t.dataset.opMeses].months = Math.max(CATALOG.minMonths, +t.value || CATALOG.minMonths); mudou(); }
     }, o);
     el.addEventListener('change', async (e) => {
       const t = e.target;
       if (t.dataset.chk) { set(t.dataset.chk, t.checked); mudou(); redesenhar(); return; }
+      if (t.dataset.item) { if (t.checked) delete state.report.ocultos[t.dataset.item]; else state.report.ocultos[t.dataset.item] = true; mudou(); redesenhar(); return; }
       if (t.dataset.secao) { state.report.secoes = { ...(state.report.secoes || {}), [t.dataset.secao]: t.checked }; mudou(); redesenhar(); return; }
       if (t.dataset.secaoProp) { state.proposal.secoes = { ...(state.proposal.secoes || {}), [t.dataset.secaoProp]: t.checked }; mudou(); redesenhar(); return; }
       if (t.hasAttribute('data-redesenhar')) { redesenhar(); return; }
@@ -398,6 +404,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         const inp = b.parentElement.querySelector('input'); if (inp) inp.value = get(cam); const cx = $('#caixa-capacidade', el); if (cx) montar(cx, caixaCapacidade()); return; }
       if (b.dataset.ovfront) { const a = state.matrix.ovFronts, k = b.dataset.ovfront, i = a.indexOf(k); i > -1 ? a.splice(i, 1) : a.push(k); state.matrix.ovFront = a[0] || ''; mudou(); redesenhar(); return; }
       if (b.dataset.removerRec) { state.matrix.quickwins.splice(+b.dataset.removerRec, 1); mudou(); redesenhar(); return; }
+      if (b.dataset.maisCampo) { state.session.extras.push({ titulo: '', valor: '', pilar: b.dataset.maisCampo, on: true }); mudou(); redesenhar(); return; }
       if (b.dataset.removerCampo) { state.session.extras.splice(+b.dataset.removerCampo, 1); mudou(); redesenhar(); return; }
       if (b.dataset.removerSecao) { state.proposal.secoesExtras.splice(+b.dataset.removerSecao, 1); mudou(); redesenhar(); return; }
       if (b.dataset.frente) { const a = state.session.fronts, k = b.dataset.frente, i = a.indexOf(k); i > -1 ? a.splice(i, 1) : a.push(k); mudou(); redesenhar(); return; }
@@ -419,7 +426,18 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         case 'copiar-dias': { const d = state.session.ctx.dias; ['ter', 'qua', 'qui', 'sex'].forEach((k) => { d[k] = { ...d.seg }; }); mudou(); redesenhar(); avisar('Horário de segunda copiado para terça a sexta.'); break; }
         case 'mais-achado': if (state.matrix.findings.length < 5) { state.matrix.findings.push({ t: '', i: '', on: true }); mudou(); redesenhar(); } break;
         case 'mais-rec': state.matrix.quickwins.push({ t: '', on: true }); mudou(); redesenhar(); break;
-        case 'mais-campo': state.session.extras.push({ titulo: '', valor: '', on: true }); mudou(); redesenhar(); break;
+        case 'gerar-rec': {
+          const novas = gerarRecomendacoes(state);
+          if (!novas.length) { avisar('Preencha as notas dos pilares ou pontue a matriz antes de gerar.', 'bad'); break; }
+          const atuais = state.matrix.quickwins.filter((x) => x.t.trim());
+          if (atuais.length && !(await confirmar('Substituir as recomendações atuais?', 'As recomendações preenchidas serão trocadas pelas geradas. Você pode editar o texto depois.', { rotulo: 'Substituir' }))) break;
+          state.matrix.quickwins = novas.map((t) => ({ t, on: true })); mudou(); redesenhar(); avisar('Recomendações geradas. Revise e ajuste o texto se precisar.', 'ok'); break;
+        }
+        case 'restaurar-textos':
+          if (await confirmar('Restaurar os textos automáticos?', 'Os textos editados no relatório voltam a ser gerados a partir dos dados. Achados, recomendações e campos continuam como estão.', { rotulo: 'Restaurar' })) {
+            for (const k of Object.keys(state.report.edits)) if (!/^(p_|pa_|pc_|pp_)/.test(k)) delete state.report.edits[k];
+            mudou(); redesenhar();
+          } break;
         case 'mais-secao': state.proposal.secoesExtras.push({ titulo: '', texto: '', on: true }); mudou(); redesenhar(); break;
         case 'atualizar-doc': redesenhar(); avisar('Documento atualizado.'); break;
         case 'pdf-relatorio': await ocupado(b, gerarRelatorio); break;

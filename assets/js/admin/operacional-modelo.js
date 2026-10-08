@@ -116,7 +116,8 @@ export function normalizarEstado(state) {
   m.findings = (m.findings || []).map((f) => ({ t: f?.t || '', i: f?.i || '', on: f?.on !== false }));
   if (!Array.isArray(m.ovFronts)) m.ovFronts = [];
   if (!m.ovFronts.length && m.ovFront) m.ovFronts = [m.ovFront];
-  state.session.extras = Array.isArray(state.session.extras) ? state.session.extras : [];
+  state.session.extras = (Array.isArray(state.session.extras) ? state.session.extras : []).map((c) => ({ titulo: c?.titulo || '', valor: c?.valor || '', pilar: c?.pilar || '', on: c?.on !== false }));
+  state.report.ocultos = state.report.ocultos && typeof state.report.ocultos === 'object' ? state.report.ocultos : {};
   state.session.ctx.esp = state.session.ctx.esp && typeof state.session.ctx.esp === 'object' ? state.session.ctx.esp : {};
   state.proposal.secoesExtras = Array.isArray(state.proposal.secoesExtras) ? state.proposal.secoesExtras : [];
   return state;
@@ -235,6 +236,9 @@ export const COBRANCAS = ['Sessão avulsa', 'Pacote de sessões', 'Mensalidade',
 export const SISTEMAS = [['agenda', 'Agenda'], ['prontuario', 'Prontuário'], ['crm', 'CRM / atendimento'], ['faturamento', 'Faturamento']];
 export const NIVEL_SISTEMA = [['nenhum', 'Nenhum'], ['planilha', 'Planilha'], ['sistema', 'Sistema']];
 
+/** Ocupação de referência: deixa folga para reposições, faltas e encaixes da lista de espera. */
+export const OCUPACAO_IDEAL = 85;
+
 const dia = (aberto) => ({ aberto, ini: '08:00', fim: '18:00', intIni: '12:00', intFim: '13:00' });
 export const contextoPadrao = () => ({
   dias: { seg: dia(true), ter: dia(true), qua: dia(true), qui: dia(true), sex: dia(true), sab: dia(false), dom: dia(false) },
@@ -243,6 +247,7 @@ export const contextoPadrao = () => ({
   mix: { convenio: '', particular: '', liminar: '' },
   sistemas: { agenda: '', prontuario: '', crm: '', faturamento: '' },
   cobranca: [], valorSessao: '', pacoteSessoes: '', pacoteValor: '', mensalidade: '', observacoes: '',
+  ocupacaoIdeal: OCUPACAO_IDEAL,
 });
 
 const minutos = (h) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(h || '')); return m ? +m[1] * 60 + +m[2] : null; };
@@ -307,6 +312,10 @@ export function capacidade(ctx) {
   const especialidades = linhasEsp.map((r, i) => ({ ...r, porHorario: porEspHorario[i], mensal: Math.round(porEspHorario[i] * horariosSemana * SEMANAS_POR_MES) }));
   const realizados = +ctx.atendimentosMes || 0;
   const ticket = +ctx.valorSessao || ((+ctx.pacoteValor && +ctx.pacoteSessoes) ? +ctx.pacoteValor / +ctx.pacoteSessoes : 0);
+  // Ocupação ideal: meta de atendimentos e distância do realizado (positivo = abaixo do ideal)
+  const ideal = Math.min(100, Math.max(1, Math.round(+ctx.ocupacaoIdeal || OCUPACAO_IDEAL)));
+  const metaMensal = Math.round(mensal * ideal / 100);
+  const lacuna = realizados ? metaMensal - realizados : null;
   return {
     modo: porEsp ? 'especialidade' : 'geral', especialidades,
     salas, profissionais: prof, simultaneos: simult, duracao: dur, porHorario, porDia, semanal, mensal,
@@ -315,5 +324,7 @@ export function capacidade(ctx) {
     ocupacao: realizados && mensal ? Math.round(realizados / mensal * 100) : null,
     ticket: ticket || null, receitaPotencial: ticket ? Math.round(mensal * ticket) : null,
     receitaOciosa: ticket && realizados ? Math.round(Math.max(0, mensal - realizados) * ticket) : null,
+    ocupacaoIdeal: ideal, metaMensal, lacuna,
+    receitaLacuna: ticket && lacuna > 0 ? Math.round(lacuna * ticket) : null,
   };
 }

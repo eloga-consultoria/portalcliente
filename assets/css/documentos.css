@@ -70,6 +70,58 @@
 .doc .grade-horario tr.fechado td:first-child{font-weight:600}
 .doc .grade-horario tr.total td{border-top:2px solid var(--d-navy);background:#f2f6f0}
 
+/* ---------- seleção por item (só na tela): desmarcado fica apagado e não sai no PDF ---------- */
+.doc .sel-item{width:15px;height:15px;margin:0 7px 0 0;vertical-align:-2px;accent-color:var(--d-purple);cursor:pointer}
+.doc .fora{opacity:.38}
+.doc .fora .editable,.doc .editable.fora{text-decoration:line-through}
+.doc :is(.kpis,.sintese,.callout,.prio,.cam-grid>div,.ocup){position:relative}
+.doc :is(.kpis,.sintese,.callout,.prio,.cam-grid>div)>.sel-item{position:absolute;left:-24px;top:6px;margin:0}
+.doc .callout>.sel-item{left:-26px}
+.doc ul.ck li>.sel-item{position:absolute;left:2px;top:7px;margin:0}
+.doc ul.ck li:has(>.sel-item):before{display:none}
+/* leitura por pilar: critérios da sessão em pontos */
+.doc .crit-linha{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.doc .crit{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--d-navy)}
+.doc .dots{display:inline-flex;gap:2px}
+.doc .dots i{width:8px;height:8px;border-radius:50%;background:#dfe5ec;display:inline-block}
+.doc .dots i.on{background:var(--d-purple)}
+.doc .gi{font-size:11.5px;color:var(--d-muted);border-left:1px solid var(--d-line);padding-left:10px}
+.doc .gi b{color:var(--d-navy)}
+.doc .extra-pilar{font-size:12.5px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--d-line)}
+.doc .legenda{font-size:11.5px;color:var(--d-muted);margin:6px 0 0;line-height:1.7}
+.doc .legenda .dots{vertical-align:0}
+.doc .sintese{background:#f6f3ff;border-left:4px solid var(--d-purple);border-radius:10px;padding:12px 16px;margin:14px 0}
+.doc .sintese small{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--d-purple);margin-bottom:4px}
+.doc .sintese p{margin:0;font-size:13px;line-height:1.6}
+/* capacidade: ocupação atual × ideal */
+.doc .kpis.k4{grid-template-columns:repeat(4,1fr)}
+.doc .kpi.ideal{border-color:var(--d-purple);background:#f6f3ff}
+.doc .kpi.ideal span{font-size:11px;color:var(--d-muted)}
+.doc .ocup{margin:6px 0 12px}
+.doc .ocup .barra{position:relative;height:10px;border-radius:6px;background:#eef1f5;margin:4px 0 8px}
+.doc .ocup .barra i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:var(--d-navy)}
+.doc .ocup .barra b{position:absolute;top:-4px;width:3px;height:18px;background:var(--d-purple);border-radius:2px;transform:translateX(-50%)}
+.doc .ocup p{margin:0;font-size:13px}
+/* caminho recomendado */
+.doc .caminho{border-radius:16px;overflow:hidden;border:1px solid var(--d-line);margin:12px 0}
+.doc .cam-topo{background:var(--d-navy);color:#fff;padding:20px 24px}
+.doc .cam-topo small{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--d-lime)}
+.doc .cam-topo h3{font-family:var(--serif);font-weight:400;font-size:24px;line-height:1.25;color:#fff;margin:6px 0 8px}
+.doc .cam-topo p{margin:0;color:#d7e1ea;font-size:13px}
+.doc .cam-formato{display:inline-block;background:var(--d-lime);color:var(--d-navy);font-weight:800;font-size:11.5px;border-radius:20px;padding:2px 10px;margin-right:4px}
+.doc .cam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.doc .cam-grid>div{padding:16px 20px 16px 30px;border-right:1px solid var(--d-line)}
+.doc .cam-grid>div:last-child{border-right:0}
+.doc .cam-grid small{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--d-purple);margin-bottom:6px}
+.doc .cam-grid ul.ck{font-size:12.5px}
+.doc .cam-grid p{font-size:12.5px;margin:0}
+.doc .cam-grid>div>.sel-item{left:8px;top:16px}
+.doc .cam-obj{margin:0;padding:12px 24px;border-top:1px solid var(--d-line);font-size:13px}
+.doc .cam-cta{display:flex;flex-direction:column;gap:4px;background:linear-gradient(90deg,#efe8ff,#f8ffd6);padding:16px 24px;border-top:1px solid var(--d-line)}
+.doc .cam-cta b{font-size:15px;color:var(--d-purple)}
+.doc .cam-cta span{font-size:13px;color:var(--d-navy)}
+@media(max-width:720px){.doc .cam-grid,.doc .kpis.k4{grid-template-columns:1fr}.doc .cam-grid>div{border-right:0;border-bottom:1px solid var(--d-line)}}
+
 /* ---------- impressão: o documento é copiado para #impressao e só ele sai no papel ---------- */
 #impressao{display:none}
 @media print{
@@ -101,6 +153,10 @@
   #impressao .doc .opts{grid-template-columns:1fr 1fr!important;gap:10px}
   #impressao .doc .radar-wrap{grid-template-columns:300px 1fr!important}
   #impressao .doc .kpis{grid-template-columns:repeat(3,1fr)!important}
+  #impressao .doc .kpis.k4{grid-template-columns:repeat(4,1fr)!important}
+  #impressao .doc .cam-grid{grid-template-columns:repeat(3,1fr)!important}
+  #impressao .doc .cam-grid>div{border-right:1px solid #dfe5ec;border-bottom:0;padding-left:20px}
+  #impressao .caminho{break-inside:avoid}
   #impressao .doc .opt{padding:14px}
   #impressao .doc .opt .price{font-size:22px}
   #impressao .editable{outline:0!important}

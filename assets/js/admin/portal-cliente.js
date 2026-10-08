@@ -8,7 +8,7 @@ import { relatorioHtml, propostaHtml } from '../reports/documentos-operacionais.
 
 /** HTML do documento pronto para o cliente: sem campos editáveis e sem scripts. */
 export function htmlPublicavel(seguro) {
-  return String(seguro).replace(/\scontenteditable="true"/g, '').replace(/\sdata-ed="[^"]*"/g, '')
+  return String(seguro).replace(/\scontenteditable="true"/g, '').replace(/\sdata-edk?="[^"]*"/g, '')
     .replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son[a-z]+="[^"]*"/gi, '');
 }
 
@@ -73,7 +73,7 @@ export async function render(p, ctx) {
     if (tipo === 'relatorio') {
       if (!diag[0]) throw new Error('Ainda não há diagnóstico operacional para publicar.');
       const state = normalizarEstado(mesclar(estadoPadrao(), diag[0].data || {}));
-      corpo = htmlPublicavel(relatorioHtml({ state, cliente: c, autodiag: ctx.autodiag, logo: ctx.logo }));
+      corpo = htmlPublicavel(relatorioHtml({ state, cliente: c, autodiag: ctx.autodiag, logo: ctx.logo, editavel: false }));
       titulo = 'Relatório de Diagnóstico Operacional';
     } else {
       const escolhida = propostas.find((x) => x.id === $('#qual-proposta', p)?.value) || propostas[0];

@@ -346,6 +346,13 @@ table.t .num{text-align:right;font-variant-numeric:tabular-nums}
 .passo input{width:72px;text-align:center}
 .passo .btn{min-width:34px;font-size:18px;line-height:1;padding:4px 8px}
 .esp-tabela td{vertical-align:middle}
+.esp-linhas{display:flex;flex-direction:column;gap:6px}
+.esp-linha{display:grid;grid-template-columns:minmax(150px,1.2fr) 1fr 1fr;gap:12px;align-items:center;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card,#fff)}
+.esp-linha.geral{border-color:var(--purple);background:#f8f5ff}
+.esp-nome{display:flex;flex-direction:column;gap:2px}
+.esp-campo{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.esp-campo>span{font-size:12px;color:var(--muted);font-weight:600}
+@media(max-width:720px){.esp-linha{grid-template-columns:1fr}.esp-campo{justify-content:space-between}}
 .itens-detalhe{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .itens-detalhe summary{cursor:pointer}
 .itens-rel{display:grid;gap:6px}

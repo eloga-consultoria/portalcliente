@@ -65,105 +65,173 @@ export const SECOES_RELATORIO = [
 export const secaoAtiva = (state, id) => (state.report.secoes || {})[id] !== false;
 
 const n0 = (v) => Number(v || 0).toLocaleString('pt-BR');
+const listaNatural = (a) => (a.length > 1 ? a.slice(0, -1).join(', ') + ' e ' + a.at(-1) : a[0] || '');
 const SIST = { nenhum: 'Nenhum', planilha: 'Planilha', sistema: 'Sistema' };
 
-export function relatorioHtml({ state, cliente, autodiag, logo }) {
+/** Síntese técnica da leitura por pilar: autodiagnóstico (0–100) × sessão (critérios 0–3). */
+function resumoLeitura(state, ev) {
+  const notas = FRONT_KEYS.map((k) => ({ k, v: num(state.auto.pillars[k]) })).filter((x) => x.v !== null).sort((a, b) => a.v - b.v);
+  const nome = (k) => CATALOG.fronts[k].pillar.toLowerCase();
+  const partes = ['O quadro cruza a percepção da gestão, registrada no autodiagnóstico (0 a 100), com a análise técnica da ELOGA na sessão de diagnóstico, que pontua gravidade, impacto financeiro, urgência e prontidão dos dados (0 a 3).'];
+  const frageis = notas.filter((x) => x.v < 60).slice(0, 2);
+  if (frageis.length) partes.push(`${frageis.length > 1 ? 'Os pilares' : 'O pilar'} ${frageis.map((x) => `${nome(x.k)} (${x.v}/100)`).join(' e ')} ${frageis.length > 1 ? 'concentram' : 'concentra'} as menores notas, sinal de processos informais ou dependentes de pessoas, com efeito direto sobre receita, continuidade terapêutica e previsibilidade da operação.`);
+  else if (notas.length) partes.push(`Nenhum pilar está abaixo de 60/100; o ganho está em padronizar e medir o que já funciona, começando por ${nome(notas[0].k)} (${notas[0].v}/100).`);
+  const prio = ev.rows.filter((r) => ev.fronts.includes(r.k));
+  if (prio.length) partes.push(`Na sessão, ${prio.map((r) => `${nome(r.k)} (gravidade + impacto ${r.gi}/6)`).join(' e ')} ${prio.length > 1 ? 'confirmaram-se como frentes prioritárias' : 'confirmou-se como frente prioritária'}.`);
+  const divergentes = ev.rows.filter((r) => (num(state.auto.pillars[r.k]) ?? 0) >= 60 && r.gi >= 4).map((r) => nome(r.k));
+  if (divergentes.length) partes.push(`Em ${divergentes.join(' e ')}, a nota do autodiagnóstico é mais alta do que a gravidade observada na sessão: a percepção interna tende a subestimar o risco, o que reforça a necessidade de medir com dados.`);
+  partes.push('Sem intervenção estruturada, essas lacunas permanecem fora dos indicadores e tendem a se refletir em perda de receita e sobrecarga da equipe.');
+  return partes.join(' ');
+}
+
+/** Pontuação da sessão em pontos (●●○): leitura rápida dos 4 critérios. */
+function pontos(v) {
+  return html`<span class="dots" aria-label="${v ?? '—'} de 3">${[1, 2, 3].map((i) => html`<i class="${v != null && v >= i ? 'on' : ''}"></i>`)}</span>`;
+}
+const LETRA = { g: 'G', i: 'I', u: 'U', p: 'P' };
+
+export function relatorioHtml({ state, cliente, autodiag, logo, editavel = true }) {
   const ev = avaliar(state), st = situacaoDados(state, ev), F = CATALOG.formats;
-  const achados = state.matrix.findings.filter((f) => f.t.trim() && f.on !== false);
-  const recs = state.matrix.quickwins.filter(recAtiva).map(recTexto).filter((q) => q.trim());
-  const complementares = (state.session.extras || []).filter((c) => c.on !== false && (String(c.titulo || '').trim() || String(c.valor || '').trim()));
+  const ocultos = state.report.ocultos || {};
+  // Seleção por item: na tela, cada item tem a sua caixa; desmarcado fica apagado e não vai para o PDF.
+  // Na versão publicada (editavel = false), os itens desmarcados simplesmente não aparecem.
+  const caixa = (attr, ligado) => (editavel ? html`<input type="checkbox" class="sel-item no-print" ${attr} ${ligado ? html`checked` : ''} title="Aparecer no PDF" aria-label="Aparecer no PDF">` : '');
+  const vis = (k) => editavel || !ocultos[k];
+  const cl = (k) => (ocultos[k] ? 'fora' : '');
+  const sel = (k) => caixa(html`data-item="${k}"`, !ocultos[k]);
+  const selP = (cam, ligado) => caixa(html`data-chk="${cam}"`, ligado);
+  const E = editavel ? (k, d) => ed(state, k, d) : (k, d) => html`${state.report.edits[k] ?? d}`;
+  const EK = (cam, v) => (editavel ? html`<span class="editable" contenteditable="true" data-edk="${cam}">${v}</span>` : html`${v}`);
+
+  const achados = state.matrix.findings.map((f, i) => ({ ...f, i: f.i, idx: i })).filter((f) => f.t.trim() && (editavel || f.on !== false));
+  const recs = state.matrix.quickwins.map((x, i) => ({ t: recTexto(x), on: recAtiva(x), idx: i })).filter((x) => x.t.trim() && (editavel || x.on));
+  const extrasDe = (k) => (state.session.extras || []).map((c, i) => ({ ...c, idx: i }))
+    .filter((c) => (k === null ? !state.session.fronts.includes(c.pilar) : c.pilar === k) && (String(c.titulo || '').trim() || String(c.valor || '').trim()) && (editavel || c.on !== false));
+  const complementares = extrasDe(null);
   const nomesPrio = ev.fronts.map((k) => CATALOG.fronts[k].name);
   const x = state.session.ctx || {};
   const cap = capacidade(x);
   const perfil = autodiag ? Object.entries({ ...(autodiag.identification?.estrutura || {}) })
     .filter(([, v]) => (Array.isArray(v) ? v.length : String(v || '').trim()))
-    .map(([k, v]) => [ROTULOS_CAMPOS['estrutura.' + k] || k, Array.isArray(v) ? v.join(', ') : v]) : [];
+    .map(([k, v]) => [k, ROTULOS_CAMPOS['estrutura.' + k] || k, Array.isArray(v) ? v.join(', ') : v]) : [];
   const prioridades = autodiag?.priorities || [];
   const naoSei = autodiag?.unknowns || [];
   const diasAbertos = DIAS.filter(([k]) => x.dias?.[k]?.aberto);
   const horas = (m) => (m ? `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : '—');
+  const MOD = { individual: 'Individual', grupo: 'Em grupo', misto: 'Misto' };
   const linhasContexto = [
-    ['Especialidades', [...(x.especialidades || []), x.especialidadesOutras].filter(Boolean).join(', ')],
-    ['Formato dos atendimentos', { individual: 'Individual', grupo: 'Em grupo', misto: 'Misto' }[x.modalidade] ? `${{ individual: 'Individual', grupo: 'Em grupo', misto: 'Misto' }[x.modalidade]} · ${x.duracao || '—'} min${cap?.modo !== 'especialidade' && +x.simultaneos > 1 ? ` · ${x.simultaneos} pacientes por sala` : ''}` : ''],
-    ['Estrutura', [x.salas && `${x.salas} sala(s)`, (cap?.modo === 'especialidade' ? cap.profissionais : x.profissionais) && `${cap?.modo === 'especialidade' ? cap.profissionais : x.profissionais} profissional(is) de atendimento`, x.administrativos && `${x.administrativos} na equipe administrativa`].filter(Boolean).join(' · ')],
-    ['Atendimentos realizados por mês', x.atendimentosMes ? n0(x.atendimentosMes) : ''],
-    ['Fonte de receita', [x.mix?.convenio && `Convênio ${x.mix.convenio}%`, x.mix?.particular && `Particular ${x.mix.particular}%`, x.mix?.liminar && `Liminar ${x.mix.liminar}%`].filter(Boolean).join(' · ')],
-    ['Modelos de cobrança', (x.cobranca || []).join(', ')],
-    ['Valores praticados', [x.valorSessao && `Sessão avulsa ${brl(x.valorSessao)}`, x.pacoteValor && `Pacote ${x.pacoteSessoes ? x.pacoteSessoes + ' sessões ' : ''}${brl(x.pacoteValor)}`, x.mensalidade && `Mensalidade ${brl(x.mensalidade)}`].filter(Boolean).join(' · ')],
-    ['Sistemas', Object.entries(x.sistemas || {}).filter(([, v]) => v).map(([k, v]) => `${({ agenda: 'Agenda', prontuario: 'Prontuário', crm: 'CRM', faturamento: 'Faturamento' })[k]}: ${SIST[v]}`).join(' · ')],
-    ['Observações', x.observacoes],
-  ].filter(([, v]) => String(v || '').trim());
+    ['esp', 'Especialidades', [...(x.especialidades || []), x.especialidadesOutras].filter(Boolean).join(', ')],
+    ['formato', 'Formato dos atendimentos', MOD[x.modalidade] ? `${MOD[x.modalidade]} · ${x.duracao || '—'} min${cap?.modo !== 'especialidade' && +x.simultaneos > 1 ? ` · ${x.simultaneos} atendimentos simultâneos` : ''}` : ''],
+    ['estrutura', 'Estrutura', [x.salas && `${x.salas} sala(s)`, (cap?.modo === 'especialidade' ? cap.profissionais : x.profissionais) && `${cap?.modo === 'especialidade' ? cap.profissionais : x.profissionais} profissional(is) de atendimento`, x.administrativos && `${x.administrativos} na equipe administrativa`].filter(Boolean).join(' · ')],
+    ['realizados', 'Atendimentos realizados por mês', x.atendimentosMes ? n0(x.atendimentosMes) : ''],
+    ['receita', 'Fonte de receita', [x.mix?.convenio && `Convênio ${x.mix.convenio}%`, x.mix?.particular && `Particular ${x.mix.particular}%`, x.mix?.liminar && `Liminar ${x.mix.liminar}%`].filter(Boolean).join(' · ')],
+    ['cobranca', 'Modelos de cobrança', (x.cobranca || []).join(', ')],
+    ['valores', 'Valores praticados', [x.valorSessao && `Sessão avulsa ${brl(x.valorSessao)}`, x.pacoteValor && `Pacote ${x.pacoteSessoes ? x.pacoteSessoes + ' sessões ' : ''}${brl(x.pacoteValor)}`, x.mensalidade && `Mensalidade ${brl(x.mensalidade)}`].filter(Boolean).join(' · ')],
+    ['sistemas', 'Sistemas', Object.entries(x.sistemas || {}).filter(([, v]) => v).map(([k, v]) => `${({ agenda: 'Agenda', prontuario: 'Prontuário', crm: 'CRM', faturamento: 'Faturamento' })[k]}: ${SIST[v]}`).join(' · ')],
+    ['obs', 'Observações', x.observacoes],
+  ].filter(([k, , v]) => String(v || '').trim() && vis('ctx_' + k));
+
+  // Caminho recomendado: frentes, entregas e indicadores do catálogo
+  const frentesCam = ev.fronts.filter((k) => CATALOG.fronts[k]);
+  const entregas = frentesCam.flatMap((k) => CATALOG.fronts[k].deliverables.slice(0, frentesCam.length > 1 ? 2 : 4));
+  const indicadores = frentesCam.flatMap((k) => CATALOG.fronts[k].kpis.slice(0, frentesCam.length > 1 ? 2 : 4));
+  const alvo = listaNatural(nomesPrio.map((y) => y.toLowerCase()));
+  const tituloCam = !ev.format ? `Estruturar ${alvo || 'a frente prioritária'} com método e indicadores`
+    : ev.format === 'kit' ? `Organizar os registros de ${alvo} para decidir com dados`
+    : ev.format === 'analise' ? `Medir ${alvo} e transformar a análise em plano de ação`
+    : ev.format === 'autonomo' ? 'Organizar a gestão do consultório com acompanhamento próximo'
+    : `Estruturar ${alvo} com acompanhamento e resultado medido`;
+  const porQueAgora = [
+    cap?.receitaLacuna ? `Para chegar à ocupação ideal de ${cap.ocupacaoIdeal}%, faltam ${n0(cap.lacuna)} atendimentos por mês, o equivalente a ${brl(cap.receitaLacuna)} mensais.` : cap?.receitaOciosa ? `A capacidade não utilizada representa ${brl(cap.receitaOciosa)} por mês.` : '',
+    achados.filter((f) => f.on !== false && f.i).length ? `Os achados da sessão já apontam impacto mensurável (${achados.filter((f) => f.on !== false && f.i).map((f) => f.i).slice(0, 2).join('; ')}).` : '',
+    'Cada mês sem linha de base é um mês de resultado que não poderá ser medido nem recuperado.',
+  ].filter(Boolean).join(' ');
 
   const S = {
     resumo: () => html`<h2>${'{n}'}Resumo executivo</h2>
-      <p class="exec">${ed(state, 'exec', state.matrix.exec.trim() || resumoAuto(state, cliente, ev))}</p>
-      <div class="kpis"><div class="kpi"><small>Nota geral</small><b>${state.auto.overall === '' ? '—' : state.auto.overall + '/100'}</b></div>
+      <p class="exec">${E('exec', state.matrix.exec.trim() || resumoAuto(state, cliente, ev))}</p>
+      ${vis('res_kpis') ? html`<div class="kpis ${cl('res_kpis')}">${sel('res_kpis')}<div class="kpi"><small>Nota geral</small><b>${state.auto.overall === '' ? '—' : state.auto.overall + '/100'}</b></div>
         <div class="kpi"><small>Nível de maturidade</small><b>${state.auto.level || '—'}</b></div>
-        <div class="kpi"><small>${nomesPrio.length > 1 ? 'Frentes prioritárias' : 'Frente prioritária'}</small><b style="font-size:${nomesPrio.length > 1 ? 14 : 17}px">${nomesPrio.join(' · ') || '—'}</b></div></div>`,
+        <div class="kpi"><small>${nomesPrio.length > 1 ? 'Frentes prioritárias' : 'Frente prioritária'}</small><b style="font-size:${nomesPrio.length > 1 ? 14 : 17}px">${nomesPrio.join(' · ') || '—'}</b></div></div>` : ''}`,
     maturidade: () => html`<h2>${'{n}'}Maturidade por pilar</h2>
       <div class="radar-wrap avoid"><div>${radar(state)}</div>
-        <div><p>${ed(state, 'radar', 'O radar consolida as notas do autodiagnóstico preenchido pela gestão, de 0 a 100 por pilar. Quanto mais próximo da borda, mais estruturado o pilar.')}</p>
+        <div><p>${E('radar', 'O radar consolida as notas do autodiagnóstico preenchido pela gestão, de 0 a 100 por pilar. Quanto mais próximo da borda, mais estruturado o pilar.')}</p>
         <p class="hint">Faixas: abaixo de 40 inicial · 40 a 59 em estruturação · 60 a 79 estruturada · 80 ou mais orientada por dados.</p></div></div>`,
     leitura: () => html`<h2>${'{n}'}Leitura por pilar</h2>
-      <p class="hint" style="margin:0 0 8px"><span class="fonte fa">A</span> <b>Autodiagnóstico</b>: respostas da própria gestão no formulário do site ·
-        <span class="fonte fs">S</span> <b>Diagnóstico operacional</b>: análise da ELOGA na sessão de 45 minutos.</p>
-      <table class="t"><thead><tr><th style="width:22%">Pilar</th><th style="width:39%"><span class="fonte fa">A</span> Autodiagnóstico</th><th><span class="fonte fs">S</span> Sessão de diagnóstico</th></tr></thead><tbody>
-      ${FRONT_KEYS.map((k) => { const v = num(state.auto.pillars[k]); const l = v === null ? null : levelOf(v);
+      <table class="t leitura"><thead><tr><th style="width:21%">Pilar</th><th style="width:40%"><span class="fonte fa">A</span> Autodiagnóstico</th><th><span class="fonte fs">S</span> Sessão de diagnóstico</th></tr></thead><tbody>
+      ${FRONT_KEYS.filter((k) => vis('lei_' + k)).map((k) => { const v = num(state.auto.pillars[k]); const l = v === null ? null : levelOf(v);
         const explorada = state.session.fronts.includes(k), s0 = state.matrix.scores[k] || {};
-        const notas = CRIT.map(([c, nome]) => (s0[c] ?? null) === null ? null : `${nome} ${s0[c]}/3`).filter(Boolean);
-        return html`<tr class="avoid"><td><b>${CATALOG.fronts[k].pillar}</b>${ev.fronts.includes(k) ? html` <span class="pill p-top">prioritária</span>` : ''}</td>
+        const pontuada = CRIT.some(([c]) => s0[c] != null), gi = (s0.g ?? 0) + (s0.i ?? 0);
+        const extras = extrasDe(k);
+        return html`<tr class="avoid ${cl('lei_' + k)}"><td>${sel('lei_' + k)}<b>${CATALOG.fronts[k].pillar}</b>${ev.fronts.includes(k) ? html` <span class="pill p-top">prioritária</span>` : ''}</td>
           <td><div>${v === null ? '—' : html`<b>${v}/100</b>`} ${l === null ? '' : html`<span class="pill ${NIVEL_CLASSE[l]}">${LEVELS[l].name}</span>`}</div>
-            <div class="hint" style="margin-top:4px">${ed(state, 'pil_' + k, l === null ? '—' : READ[k][l])}</div></td>
-          <td>${explorada ? html`${notas.length ? html`<div style="margin-bottom:4px">${notas.join(' · ')}</div>` : ''}
-              <div class="hint">${ed(state, 'ses_' + k, notas.length ? 'Pilar explorado na sessão; pontuação da matriz de encaixe ao lado.' : 'Pilar explorado na sessão.')}</div>`
-            : html`<span class="hint">Não explorado na sessão.</span>`}</td></tr>`; })}</tbody></table>`,
+            <div class="hint" style="margin-top:4px">${E('pil_' + k, l === null ? '—' : READ[k][l])}</div></td>
+          <td>${explorada ? html`${pontuada ? html`<div class="crit-linha">${CRIT.map(([c, nome]) => html`<span class="crit" title="${nome}"><b>${LETRA[c]}</b>${pontos(s0[c])}</span>`)}<span class="gi">G+I <b>${gi}/6</b></span></div>` : html`<span class="hint">Explorado na sessão, sem pontuação na matriz.</span>`}
+              ${state.report.edits['ses_' + k] ? html`<div class="hint" style="margin-top:4px">${E('ses_' + k, '')}</div>` : ''}
+              ${extras.map((c) => html`<div class="extra-pilar ${c.on === false ? 'fora' : ''}">${selP(`session.extras.${c.idx}.on`, c.on !== false)}<b>${EK(`session.extras.${c.idx}.titulo`, c.titulo || 'Informação')}:</b> ${EK(`session.extras.${c.idx}.valor`, c.valor || '')}</div>`)}`
+            : html`<span class="hint">Não explorado na sessão.</span>`}</td></tr>`; })}</tbody></table>
+      <p class="legenda"><span class="fonte fa">A</span> respostas da gestão no autodiagnóstico, de 0 a 100 · <span class="fonte fs">S</span> análise da ELOGA na sessão de 45 minutos, de 0 a 3:
+        <b>G</b> gravidade · <b>I</b> impacto financeiro · <b>U</b> urgência · <b>P</b> prontidão dos dados (${pontos(2)} = 2 de 3). <b>G+I</b> define a prioridade.</p>
+      ${vis('lei_resumo') ? html`<div class="sintese avoid ${cl('lei_resumo')}">${sel('lei_resumo')}<small>Síntese da leitura</small><p>${E('lei_resumo', resumoLeitura(state, ev))}</p></div>` : ''}`,
     autodiag: () => (!autodiag ? '' : html`<h2 class="pb">${'{n}'}O que o autodiagnóstico revelou</h2>
-      ${prioridades.length ? html`<p>As três prioridades apontadas pelas respostas da gestão, com as respostas literais:</p>
-        ${prioridades.map((p, i) => html`<div class="prio avoid"><b>${i + 1}. ${CATALOG.fronts[p.id]?.pillar || p.id}</b> <span class="hint">· ${p.nota ?? '—'}/100</span>
-          ${(p.itens || []).map((it) => html`<p class="quote">Respondeu “${it.rotulo}” para: ${limparItem(it.t)}</p>`)}</div>`)}` : ''}
-      ${naoSei.length ? html`<h3>O que a operação ainda não enxerga</h3><p>Itens marcados como “Não sei”: mostram onde faltam dados para decidir com segurança.</p>
-        <ul class="ck">${naoSei.map((y) => html`<li><b>${y.pillar}:</b> ${limparItem(y.t)}</li>`)}</ul>` : ''}
-      ${perfil.length ? html`<h3>Perfil da operação declarado</h3><table class="t avoid"><tbody>${perfil.map(([r, v]) => html`<tr><td style="width:36%"><b>${r}</b></td><td>${v}</td></tr>`)}</tbody></table>` : ''}`),
+      ${prioridades.length ? html`<p>${E('ad_intro', 'As três prioridades apontadas pelas respostas da gestão, com as respostas literais:')}</p>
+        ${prioridades.map((p, i) => (vis('ad_p' + i) ? html`<div class="prio avoid ${cl('ad_p' + i)}">${sel('ad_p' + i)}<b>${i + 1}. ${CATALOG.fronts[p.id]?.pillar || p.id}</b> <span class="hint">· ${p.nota ?? '—'}/100</span>
+          ${(p.itens || []).map((it, j) => (vis(`ad_p${i}_${j}`) ? html`<p class="quote ${cl(`ad_p${i}_${j}`)}">${sel(`ad_p${i}_${j}`)}${E(`ad_p${i}_${j}`, `Respondeu “${it.rotulo}” para: ${limparItem(it.t)}`)}</p>` : ''))}</div>` : ''))}` : ''}
+      ${naoSei.length ? html`<h3>O que a operação ainda não enxerga</h3><p>${E('ad_naosei', 'Itens marcados como “Não sei”: mostram onde faltam dados para decidir com segurança.')}</p>
+        <ul class="ck">${naoSei.map((y, i) => (vis('ad_n' + i) ? html`<li class="${cl('ad_n' + i)}">${sel('ad_n' + i)}<b>${y.pillar}:</b> ${E('ad_n' + i, limparItem(y.t))}</li>` : ''))}</ul>` : ''}
+      ${perfil.length ? html`<h3>Perfil da operação declarado</h3><table class="t avoid"><tbody>${perfil.filter(([k]) => vis('ad_f_' + k)).map(([k, r, v]) => html`<tr class="${cl('ad_f_' + k)}"><td style="width:36%">${sel('ad_f_' + k)}<b>${r}</b></td><td>${E('ad_f_' + k, v)}</td></tr>`)}</tbody></table>` : ''}`),
     contexto: () => (!linhasContexto.length && !diasAbertos.length ? '' : html`<h2>${'{n}'}Contexto da operação</h2>
-      ${diasAbertos.length ? html`<h3>Horário de funcionamento</h3>
+      ${diasAbertos.length && vis('ctx_horario') ? html`<div class="${cl('ctx_horario')}"><h3>${sel('ctx_horario')}Horário de funcionamento</h3>
       <table class="t avoid grade-horario"><thead><tr><th>Dia</th><th>Abertura</th><th>Fechamento</th><th>Intervalo</th><th style="text-align:right">Horas de atendimento</th></tr></thead><tbody>
         ${DIAS.map(([k, nome]) => { const d = x.dias?.[k]; if (!d?.aberto) return html`<tr class="fechado"><td>${nome}</td><td colspan="4">Fechado</td></tr>`;
           return html`<tr><td><b>${nome}</b></td><td>${d.ini || '—'}</td><td>${d.fim || '—'}</td><td>${d.intIni && d.intFim ? `${d.intIni} às ${d.intFim}` : 'Sem intervalo'}</td><td style="text-align:right">${horas(minutosDeAtendimento(d))}</td></tr>`; })}
-        <tr class="total"><td colspan="4"><b>Total semanal</b></td><td style="text-align:right"><b>${horas(DIAS.reduce((t, [k]) => t + minutosDeAtendimento(x.dias?.[k]), 0))}</b></td></tr></tbody></table>` : ''}
+        <tr class="total"><td colspan="4"><b>Total semanal</b></td><td style="text-align:right"><b>${horas(DIAS.reduce((t, [k]) => t + minutosDeAtendimento(x.dias?.[k]), 0))}</b></td></tr></tbody></table></div>` : ''}
       ${linhasContexto.length ? html`<h3>Estrutura e modelo de atendimento</h3>
-      <table class="t avoid"><tbody>${linhasContexto.map(([r, v]) => html`<tr><td style="width:32%"><b>${r}</b></td><td>${v}</td></tr>`)}</tbody></table>` : ''}`),
+      <table class="t avoid"><tbody>${linhasContexto.map(([k, r, v]) => html`<tr class="${cl('ctx_' + k)}"><td style="width:32%">${sel('ctx_' + k)}<b>${r}</b></td><td style="white-space:pre-line">${E('ctx_' + k, v)}</td></tr>`)}</tbody></table>` : ''}`),
     capacidade: () => (!cap ? '' : html`<h2 class="pb">${'{n}'}Capacidade de atendimento</h2>
-      <p>${ed(state, 'cap_intro', cap.modo === 'especialidade'
+      <p>${E('cap_intro', cap.modo === 'especialidade'
         ? `Calculada a partir do horário de funcionamento (sem os intervalos de fechamento), da duração de ${cap.duracao} minutos por atendimento e dos profissionais e atendimentos simultâneos de cada especialidade${cap.salas ? `, considerando ${cap.salas} sala(s) compartilhada(s)` : ''}: ${cap.porHorario} atendimento(s) possível(is) por horário.`
-        : `Calculada a partir do horário de funcionamento (sem os intervalos de fechamento), da duração de ${cap.duracao} minutos por atendimento e de ${cap.porHorario} atendimento(s) possível(is) por horário: o menor número entre salas (${cap.salas}) e profissionais (${cap.profissionais})${cap.simultaneos > 1 ? `, com ${cap.simultaneos} pacientes por sala` : ''}.`)}</p>
-      ${cap.modo === 'especialidade' ? html`<table class="t avoid"><thead><tr><th>Especialidade</th><th style="text-align:center">Profissionais</th><th style="text-align:center">Atendimentos simultâneos</th><th style="text-align:center">Por horário</th><th style="text-align:right">Por mês</th></tr></thead><tbody>
+        : `Calculada a partir do horário de funcionamento (sem os intervalos de fechamento), da duração de ${cap.duracao} minutos por atendimento e de ${cap.porHorario} atendimento(s) possível(is) por horário: o menor número entre salas (${cap.salas}) e profissionais (${cap.profissionais})${cap.simultaneos > 1 ? `, com ${cap.simultaneos} atendimentos simultâneos` : ''}.`)}</p>
+      ${cap.modo === 'especialidade' && vis('cap_esp') ? html`<table class="t avoid ${cl('cap_esp')}"><thead><tr><th>${sel('cap_esp')}Especialidade</th><th style="text-align:center">Profissionais</th><th style="text-align:center">Atendimentos simultâneos</th><th style="text-align:center">Por horário</th><th style="text-align:right">Por mês</th></tr></thead><tbody>
         ${cap.especialidades.map((e) => html`<tr><td><b>${e.nome}</b></td><td style="text-align:center">${e.prof}</td><td style="text-align:center">${e.simult}</td><td style="text-align:center">${e.porHorario}</td><td style="text-align:right">${n0(e.mensal)}</td></tr>`)}</tbody></table>` : ''}
-      <div class="kpis"><div class="kpi"><small>Por semana</small><b>${n0(cap.semanal)}</b></div><div class="kpi"><small>Por mês</small><b>${n0(cap.mensal)}</b></div>
-        <div class="kpi"><small>Ocupação atual</small><b>${cap.ocupacao === null ? '—' : cap.ocupacao + '%'}</b></div></div>
-      <table class="t avoid"><thead><tr><th>Dia</th><th>Horas de atendimento</th><th>Horários</th><th>Atendimentos possíveis</th></tr></thead><tbody>
-        ${cap.porDia.filter((d) => d.aberto).map((d) => html`<tr><td>${d.nome}</td><td>${Math.floor(d.minutos / 60)}h${d.minutos % 60 ? String(d.minutos % 60).padStart(2, '0') : ''}</td><td>${d.horarios}</td><td>${n0(d.atendimentos)}</td></tr>`)}</tbody></table>
-      <div class="callout avoid"><p><b>Gargalo:</b> ${cap.gargalo === 'sem_salas' ? 'informe o número de salas para identificar o gargalo.' : cap.gargalo === 'equilibrado' ? 'salas e profissionais estão equilibrados.' : cap.gargalo === 'salas'
+      ${vis('cap_kpis') ? html`<div class="kpis k4 ${cl('cap_kpis')}">${sel('cap_kpis')}<div class="kpi"><small>Por semana</small><b>${n0(cap.semanal)}</b></div><div class="kpi"><small>Por mês</small><b>${n0(cap.mensal)}</b></div>
+        <div class="kpi"><small>Ocupação atual</small><b>${cap.ocupacao === null ? '—' : cap.ocupacao + '%'}</b></div>
+        <div class="kpi ideal"><small>Ocupação ideal</small><b>${cap.ocupacaoIdeal}%</b><span>${n0(cap.metaMensal)} atend./mês</span></div></div>
+        ${cap.ocupacao !== null ? html`<div class="ocup avoid"><div class="barra"><i style="width:${Math.min(100, cap.ocupacao)}%"></i><b style="left:${cap.ocupacaoIdeal}%" title="Ideal"></b></div>
+          <p>${E('cap_ocup', cap.lacuna > 0 ? `A operação utiliza ${cap.ocupacao}% da capacidade. Para atingir a ocupação ideal de ${cap.ocupacaoIdeal}%, seriam necessários ${n0(cap.lacuna)} atendimentos a mais por mês${cap.receitaLacuna ? `, o equivalente a ${brl(cap.receitaLacuna)} mensais` : ''}. A faixa ideal preserva folga para reposições, faltas e encaixes da lista de espera.`
+            : cap.lacuna < 0 ? `A operação utiliza ${cap.ocupacao}% da capacidade, acima da ocupação ideal de ${cap.ocupacaoIdeal}%. Agenda acima do ideal reduz a folga para reposições e encaixes e aumenta o risco de sobrecarga da equipe; o próximo passo é planejar a ampliação da capacidade.`
+            : `A operação está na ocupação ideal de ${cap.ocupacaoIdeal}%, com folga para reposições, faltas e encaixes.`)}</p></div>` : html`<p class="hint">Ocupação ideal de referência: ${cap.ocupacaoIdeal}% da capacidade (${n0(cap.metaMensal)} atendimentos por mês), preservando folga para reposições, faltas e encaixes.</p>`}` : ''}
+      ${vis('cap_dias') ? html`<table class="t avoid ${cl('cap_dias')}"><thead><tr><th>${sel('cap_dias')}Dia</th><th>Horas de atendimento</th><th>Horários</th><th>Atendimentos possíveis</th></tr></thead><tbody>
+        ${cap.porDia.filter((d) => d.aberto).map((d) => html`<tr><td>${d.nome}</td><td>${horas(d.minutos)}</td><td>${d.horarios}</td><td>${n0(d.atendimentos)}</td></tr>`)}</tbody></table>` : ''}
+      ${vis('cap_garg') ? html`<div class="callout avoid ${cl('cap_garg')}">${sel('cap_garg')}<p><b>Gargalo:</b> ${E('cap_garg', cap.gargalo === 'sem_salas' ? 'informe o número de salas para identificar o gargalo.' : cap.gargalo === 'equilibrado' ? 'salas e profissionais estão equilibrados.' : cap.gargalo === 'salas'
         ? `as salas. Há ${cap.ociosos} profissional(is) a mais do que salas no mesmo horário; com mais uma sala, a capacidade cresce em ${n0(cap.ganhoMensal)} atendimentos por mês.`
-        : `os profissionais. Há ${cap.ociosos} sala(s) sem profissional no mesmo horário; com mais um profissional, a capacidade cresce em ${n0(cap.ganhoMensal)} atendimentos por mês.`}</p>
-        ${cap.receitaPotencial ? html`<p style="margin-top:6px">Receita potencial com a agenda cheia: <b>${brl(cap.receitaPotencial)}/mês</b>${cap.receitaOciosa ? html` · capacidade não utilizada: <b>${brl(cap.receitaOciosa)}/mês</b>` : ''} (valor médio de ${brl(cap.ticket)} por atendimento).</p>` : ''}</div>`),
+        : `os profissionais. Há ${cap.ociosos} sala(s) sem profissional no mesmo horário; com mais um profissional, a capacidade cresce em ${n0(cap.ganhoMensal)} atendimentos por mês.`)}</p>
+        ${cap.receitaPotencial ? html`<p style="margin-top:6px">${E('cap_receita', `Receita potencial com a agenda cheia: ${brl(cap.receitaPotencial)}/mês${cap.receitaOciosa ? ` · capacidade não utilizada: ${brl(cap.receitaOciosa)}/mês` : ''} (valor médio de ${brl(cap.ticket)} por atendimento).`)}</p>` : ''}</div>` : ''}`),
     achados: () => html`<h2>${'{n}'}Principais achados</h2>
-      ${achados.length ? html`<table class="t avoid"><thead><tr><th style="width:6%">#</th><th>Achado</th><th style="width:26%">Impacto estimado</th></tr></thead><tbody>
-        ${achados.map((f, i) => html`<tr><td>${i + 1}</td><td>${f.t}</td><td>${f.i || 'A medir na linha de base'}</td></tr>`)}</tbody></table>`
+      ${achados.length ? html`<table class="t avoid"><thead><tr><th style="width:9%">#</th><th>Achado</th><th style="width:26%">Impacto estimado</th></tr></thead><tbody>
+        ${achados.map((f, i) => html`<tr class="${f.on === false ? 'fora' : ''}"><td style="white-space:nowrap">${selP(`matrix.findings.${f.idx}.on`, f.on !== false)}${i + 1}</td><td>${EK(`matrix.findings.${f.idx}.t`, f.t)}</td><td>${EK(`matrix.findings.${f.idx}.i`, f.i || 'A medir na linha de base')}</td></tr>`)}</tbody></table>`
         : html`<p class="empty">Registre os achados na aba Matriz.</p>`}`,
-    recomendacoes: () => html`<h2>${'{n}'}Recomendações imediatas</h2><p>Ações que a gestão pode iniciar desde já, sem custo adicional:</p>
-      ${recs.length ? html`<ul class="ck">${recs.map((y) => html`<li>${y}</li>`)}</ul>` : html`<p class="empty">Registre as recomendações na aba Matriz.</p>`}`,
+    recomendacoes: () => html`<h2>${'{n}'}Recomendações imediatas</h2><p>${E('rec_intro', 'Ações que a gestão pode iniciar desde já e o que cada uma prepara para a etapa seguinte:')}</p>
+      ${recs.length ? html`<ul class="ck">${recs.map((y) => html`<li class="${y.on ? '' : 'fora'}">${selP(`matrix.quickwins.${y.idx}.on`, y.on)}${EK(`matrix.quickwins.${y.idx}.t`, y.t)}</li>`)}</ul>` : html`<p class="empty">Registre as recomendações na aba Matriz.</p>`}`,
     complementares: () => (!complementares.length ? '' : html`<h2>${'{n}'}Informações complementares</h2>
-      <table class="t avoid"><tbody>${complementares.map((c) => html`<tr><td style="width:32%"><b>${c.titulo || '—'}</b></td><td style="white-space:pre-line">${c.valor || ''}</td></tr>`)}</tbody></table>`),
+      <table class="t avoid"><tbody>${complementares.map((c) => html`<tr class="${c.on === false ? 'fora' : ''}"><td style="width:32%">${selP(`session.extras.${c.idx}.on`, c.on !== false)}<b>${EK(`session.extras.${c.idx}.titulo`, c.titulo || '—')}</b></td><td style="white-space:pre-line">${EK(`session.extras.${c.idx}.valor`, c.valor || '')}</td></tr>`)}</tbody></table>`),
     dados: () => html`<h2>${'{n}'}Situação dos dados</h2>
-      <p><span class="pill ${st[0] === 'apto' ? 'p-ok' : 'p-warn'}">${st[1]}</span></p><p>${ed(state, 'data', st[2])}</p>
-      ${state.session.C.some((y) => y.n || y.v) ? html`<table class="t avoid"><thead><tr><th>Verificação</th><th style="width:14%">Situação</th><th>Detalhe</th></tr></thead><tbody>
-        ${QC.map((p, i) => html`<tr><td>${p}</td><td>${({ sim: 'Sim', parcial: 'Parcial', nao: 'Não' })[state.session.C[i].v] || '—'}</td><td>${state.session.C[i].n}</td></tr>`)}</tbody></table>` : ''}`,
+      <p><span class="pill ${st[0] === 'apto' ? 'p-ok' : 'p-warn'}">${st[1]}</span></p><p>${E('data', st[2])}</p>
+      ${state.session.C.some((y) => y.n || y.v) && vis('dados_tab') ? html`<table class="t avoid ${cl('dados_tab')}"><thead><tr><th>${sel('dados_tab')}Verificação</th><th style="width:14%">Situação</th><th>Detalhe</th></tr></thead><tbody>
+        ${QC.map((p, i) => html`<tr><td>${p}</td><td>${({ sim: 'Sim', parcial: 'Parcial', nao: 'Não' })[state.session.C[i].v] || '—'}</td><td>${EK(`session.C.${i}.n`, state.session.C[i].n)}</td></tr>`)}</tbody></table>` : ''}`,
     caminho: () => html`<h2>${'{n}'}Caminho recomendado</h2>
-      <div class="callout avoid"><p>${nomesPrio.length > 1 ? 'Frentes prioritárias' : 'Frente prioritária'}: <b>${nomesPrio.join(', ') || '—'}</b></p>
-        <p>Formato recomendado: <b>${ev.format ? F[ev.format].name : '—'}</b></p>
-        <p style="margin-top:8px;color:#d7e1ea">${ed(state, 'path', ev.format ? F[ev.format].desc : '')}</p></div>
-      ${state.matrix.goal3m.trim() ? html`<p><b>Objetivo declarado pela gestão para os próximos 3 meses:</b> “${state.matrix.goal3m}”</p>` : ''}
-      <p>${ed(state, 'fecho', `As condições, o escopo e o investimento estão detalhados na proposta comercial, apresentada na devolutiva${state.session.devolutiva ? ' (' + state.session.devolutiva + ')' : ''}.`)}</p>`,
+      <div class="caminho avoid">
+        <div class="cam-topo"><small>Próximo passo recomendado</small>
+          <h3>${E('cam_titulo', tituloCam)}</h3>
+          <p>${ev.format ? html`<span class="cam-formato">${F[ev.format].name}</span> ` : ''}${E('path', ev.format ? F[ev.format].desc : '')}</p></div>
+        <div class="cam-grid">
+          ${entregas.length && vis('cam_entregas') ? html`<div class="${cl('cam_entregas')}">${sel('cam_entregas')}<small>O que a clínica passa a ter</small><ul class="ck">${entregas.map((y, i) => html`<li>${E('cam_e' + i, y)}</li>`)}</ul></div>` : ''}
+          ${indicadores.length && vis('cam_kpis') ? html`<div class="${cl('cam_kpis')}">${sel('cam_kpis')}<small>Como o resultado será medido</small><ul class="ck">${indicadores.map((y, i) => html`<li>${E('cam_k' + i, y)}</li>`)}</ul></div>` : ''}
+          ${vis('cam_agora') ? html`<div class="${cl('cam_agora')}">${sel('cam_agora')}<small>Por que começar agora</small><p>${E('cam_agora', porQueAgora)}</p></div>` : ''}
+        </div>
+        ${state.matrix.goal3m.trim() && vis('cam_obj') ? html`<p class="cam-obj ${cl('cam_obj')}">${sel('cam_obj')}<b>Objetivo declarado pela gestão para os próximos 3 meses:</b> “${EK('matrix.goal3m', state.matrix.goal3m)}”</p>` : ''}
+        <div class="cam-cta"><b>${E('cam_cta_t', 'Conheça a proposta')}</b><span>${E('fecho', `As opções, o escopo e o investimento estão na proposta comercial, apresentada na devolutiva${state.session.devolutiva ? ' (' + state.session.devolutiva + ')' : ''}. Escolha o formato que melhor se ajusta ao momento da clínica e inicie a implantação.`)}</span></div>
+      </div>`,
   };
   // Numeração contínua só das seções incluídas e com conteúdo
   let n = 0;
@@ -204,7 +272,6 @@ export const SECOES_PROPOSTA = [
 ];
 export const secaoPropostaAtiva = (state, id) => (state.proposal.secoes || {})[id] !== false;
 const nomesFrentes = (ks) => ks.map((k) => CATALOG.fronts[k]?.name).filter(Boolean);
-const listaNatural = (a) => (a.length > 1 ? a.slice(0, -1).join(', ') + ' e ' + a.at(-1) : a[0] || '');
 
 export function propostaHtml({ state, cliente, logo, editavel = true }) {
   semearOpcoes(state);

@@ -101,6 +101,7 @@ export function imprimirDocumento(docEl, nomeArquivo) {
   if (rodape) estilo.textContent = `@media print{@page{@bottom-left{content:${css(rodape)}}}}`;
   area.replaceChildren(estilo, tab);
   area.querySelectorAll('[contenteditable]').forEach((x) => x.removeAttribute('contenteditable'));
+  area.querySelectorAll('.fora, .sel-item, .no-print').forEach((x) => x.remove());
   const titulo = document.title;
   document.title = nomeArquivo; // vira o nome sugerido do PDF
   document.body.classList.add('imprimindo');
