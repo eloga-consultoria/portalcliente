@@ -101,6 +101,10 @@ export function relatorioHtml({ state, cliente, autodiag, logo, editavel = true 
   const sel = (k) => caixa(html`data-item="${k}"`, !ocultos[k]);
   const selP = (cam, ligado) => caixa(html`data-chk="${cam}"`, ligado);
   const E = editavel ? (k, d) => ed(state, k, d) : (k, d) => html`${state.report.edits[k] ?? d}`;
+  // Considerações livres da sessão por pilar: campo aberto no documento (vazio não sai no PDF)
+  const consid = (k) => { const v = String(state.session.consid?.[k] || '').trim();
+    if (editavel) return html`<div class="editable consid" contenteditable="true" data-edk="session.consid.${k}" data-ph="+ Adicionar considerações da sessão">${v}</div>`;
+    return v ? html`<div class="consid">${v}</div>` : ''; };
   const EK = (cam, v) => (editavel ? html`<span class="editable" contenteditable="true" data-edk="${cam}">${v}</span>` : html`${v}`);
 
   const achados = state.matrix.findings.map((f, i) => ({ ...f, i: f.i, idx: i })).filter((f) => f.t.trim() && (editavel || f.on !== false));
@@ -169,7 +173,8 @@ export function relatorioHtml({ state, cliente, autodiag, logo, editavel = true 
           <td>${explorada ? html`${pontuada ? html`<div class="crit-linha">${CRIT.map(([c, nome]) => html`<span class="crit" title="${nome}"><b>${LETRA[c]}</b>${pontos(s0[c])}</span>`)}<span class="gi">G+I <b>${gi}/6</b></span></div>` : html`<span class="hint">Explorado na sessão, sem pontuação na matriz.</span>`}
               ${state.report.edits['ses_' + k] ? html`<div class="hint" style="margin-top:4px">${E('ses_' + k, '')}</div>` : ''}
               ${extras.map((c) => html`<div class="extra-pilar ${c.on === false ? 'fora' : ''}">${selP(`session.extras.${c.idx}.on`, c.on !== false)}<b>${EK(`session.extras.${c.idx}.titulo`, c.titulo || 'Informação')}:</b> ${EK(`session.extras.${c.idx}.valor`, c.valor || '')}</div>`)}`
-            : html`<span class="hint">Não explorado na sessão.</span>`}</td></tr>`; })}</tbody></table>
+            : html`<span class="hint">Não explorado na sessão.</span>`}
+            ${consid(k)}</td></tr>`; })}</tbody></table>
       <p class="legenda"><span class="fonte fa">A</span> respostas da gestão no autodiagnóstico, de 0 a 100 · <span class="fonte fs">S</span> análise da ELOGA na sessão de 45 minutos, de 0 a 3:
         <b>G</b> gravidade · <b>I</b> impacto financeiro · <b>U</b> urgência · <b>P</b> prontidão dos dados (${pontos(2)} = 2 de 3). <b>G+I</b> define a prioridade.</p>
       ${vis('lei_resumo') ? html`<div class="sintese avoid ${cl('lei_resumo')}">${sel('lei_resumo')}<small>Síntese da leitura</small><p>${E('lei_resumo', resumoLeitura(state, ev))}</p></div>` : ''}`,

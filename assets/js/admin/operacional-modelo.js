@@ -127,7 +127,7 @@ export const estadoPadrao = () => ({
   client: { sessionDate: hoje(), profile: 'terapias', payer: 'misto' },
   auto: { overall: '', level: '', leadClass: '', date: '', notes: '', pillars: { fat: '', fin: '', com: '', age: '', exp: '', reg: '' } },
   session: { ctx: contextoPadrao(), fronts: [], A: ['', '', '', '', ''], B: {}, C: [{ v: '', n: '' }, { v: '', n: '' }, { v: '', n: '' }],
-    D: { who: '', nochange: '', success: '', team: '', budget: '', decisorPresent: '' }, devolutiva: '', freeNotes: '', extras: [] },
+    D: { who: '', nochange: '', success: '', team: '', budget: '', decisorPresent: '' }, devolutiva: '', freeNotes: '', extras: [], consid: {} },
   matrix: { scores: {}, ovFront: '', ovFronts: [], ovFormat: '', findings: [{ t: '', i: '', on: true }, { t: '', i: '', on: true }, { t: '', i: '', on: true }],
     quickwins: [{ t: '', on: true }, { t: '', on: true }, { t: '', on: true }], goal3m: '', exec: '' },
   report: { edits: {} },

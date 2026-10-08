@@ -102,6 +102,7 @@ export function imprimirDocumento(docEl, nomeArquivo) {
   area.replaceChildren(estilo, tab);
   area.querySelectorAll('[contenteditable]').forEach((x) => x.removeAttribute('contenteditable'));
   area.querySelectorAll('.fora, .sel-item, .no-print').forEach((x) => x.remove());
+  area.querySelectorAll('[data-ph]').forEach((x) => { if (!x.textContent.trim()) x.remove(); }); // campos abertos vazios
   const titulo = document.title;
   document.title = nomeArquivo; // vira o nome sugerido do PDF
   document.body.classList.add('imprimindo');

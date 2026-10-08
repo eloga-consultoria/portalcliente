@@ -198,6 +198,8 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         <div class="chips" style="margin-bottom:10px">${FRONT_KEYS.map((k) => html`<button type="button" class="chip ${state.session.fronts.includes(k) ? 'on' : ''}" data-frente="${k}" aria-pressed="${state.session.fronts.includes(k)}" style="${candidatas(state).includes(k) && !state.session.fronts.includes(k) ? 'border-color:var(--purple);color:var(--purple)' : ''}">${CATALOG.fronts[k].name}${num(state.auto.pillars[k]) !== null ? ' · ' + state.auto.pillars[k] : ''}</button>`)}</div>
         ${state.session.fronts.length ? state.session.fronts.map((k) => { if (!state.session.B[k]) state.session.B[k] = QB[k].map(() => '');
           return html`<div style="margin:6px 0 14px"><h4 style="margin:10px 0 4px;color:var(--purple)">${CATALOG.fronts[k].name}</h4>${QB[k].map((p, i) => campoTexto(i + 1, p, `session.B.${k}.${i}`))}
+            <div class="op-q"><div class="qt"><span class="qn">✎</span>Considerações da sessão <span class="xs muted">(aparecem na Leitura por pilar do relatório)</span></div>
+              <textarea data-k="session.consid.${k}" rows="2" maxlength="2000" style="min-height:52px">${state.session.consid?.[k] || ''}</textarea></div>
             ${camposExtras(k)}<button class="btn sm secondary" type="button" data-mais-campo="${k}">+ Adicionar campo em ${CATALOG.fronts[k].name}</button></div>`; })
           : html`<p class="muted"><i>Nenhuma frente selecionada.</i></p>`}</div>
       <div class="card"><h3>C · Dados disponíveis <span class="badge purple">define o formato</span></h3>
