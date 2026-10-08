@@ -174,3 +174,8 @@ Ver `docs/BACKUP.md`.
 | `docs/SEGURANCA.md` | Como o portal protege os dados e o que testar |
 | `docs/BACKUP.md` | Backup automático, manual e como restaurar |
 | `docs/LGPD.md` | Dados tratados, finalidade, retenção e pedidos dos titulares |
+
+## Atualizações do portal (cache do navegador)
+
+Antes de cada publicação, rode `node tools/versionar.mjs`. Ele marca cada arquivo do portal com uma
+versão (`?v=...`), para o navegador baixar sempre a versão nova. O teste `npm test` acusa se esquecer.
