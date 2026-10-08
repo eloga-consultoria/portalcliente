@@ -272,8 +272,8 @@ function cartaoOpcao(o, i, bonus = []) {
 
 /** Seções da proposta. A administradora escolhe quais entram no PDF. */
 export const SECOES_PROPOSTA = [
-  ['contexto', 'Contexto e objetivo'], ['escopo', 'Escopo de atuação'], ['acompanhamento', 'Como funciona o acompanhamento'],
-  ['condicoes', 'Condições'], ['adicionais', 'Seções adicionais'], ['bonus', 'Bônus exclusivos'], ['investimento', 'Investimento (opções)'],
+  ['contexto', 'Contexto e objetivo'], ['escopo', 'Escopo de atuação'], ['acompanhamento', 'Acompanhamento e plano de 90 dias'],
+  ['participacao', 'Participação da clínica'], ['condicoes', 'Condições'], ['adicionais', 'Seções adicionais'], ['bonus', 'Bônus exclusivos'], ['investimento', 'Investimento (opções)'],
   ['oferta', 'Oferta especial'], ['custos', 'Custos adicionais'], ['proximos', 'Próximos passos'], ['aceite', 'Aceite (assinaturas)'],
 ];
 export const secaoPropostaAtiva = (state, id) => (state.proposal.secoes || {})[id] !== false;
@@ -290,6 +290,13 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
   const extras = (P.extras || []).filter((x) => String(x.desc || '').trim() && Number(x.valor) > 0);
   const adicionais = (P.secoesExtras || []).filter((x) => x.on !== false && (String(x.titulo || '').trim() || String(x.texto || '').trim()));
   const E = editavel ? (k, d) => ed(state, k, d) : (k, d) => html`${state.report.edits[k] ?? d}`;
+  // Lista editável: cada linha vira um item (Enter cria um novo item no documento)
+  const EL = (k, itens) => {
+    const v = state.report.edits[k];
+    const lista = v != null ? String(v).split('\n').map((x) => x.trim()).filter(Boolean) : itens;
+    return editavel ? html`<ul class="ck editable lista-ed" contenteditable="true" data-ed="${k}">${lista.map((x) => html`<li>${x}</li>`)}</ul>`
+      : html`<ul class="ck">${lista.map((x) => html`<li>${x}</li>`)}</ul>`;
+  };
   const on = (id) => secaoPropostaAtiva(state, id);
   const prio = nomesFrentes(ev.fronts).map((x) => x.toLowerCase());
   let n = 0; const sec = () => ++n;
@@ -309,13 +316,32 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
     ['Acompanhamento', 'Reuniões em datas fixas com painel de indicadores: implantado, resultado e pendente. Resposta em até 2 dias úteis entre as reuniões, por e-mail ou WhatsApp.'],
     ['Encerramento', 'Relatório comparativo antes e depois, entrega do kit da frente (painéis, planilhas, POPs e materiais de treinamento) e termo de encerramento.'],
   ];
+  const CRONOGRAMA = [
+    ['Dias 1–30', 'Validar dados e organizar controles prioritários', 'Linha de base; contas a receber; custos e honorários; mapa de capacidade; responsabilidades; plano de ação',
+      'ELOGA conduz o levantamento; gestão envia os dados e indica o responsável interno', 'Linha de base apresentada e plano de ação aprovado pela gestão'],
+    ['Dias 31–60', 'Implantar e testar', 'Precificação inicial; política de descontos; fluxo de grade e reposição; CRM; scripts; treinamento; conferência documental',
+      'ELOGA implanta e treina; equipe aplica as rotinas no dia a dia', 'Fluxos em uso pela equipe e primeiros indicadores registrados'],
+    ['Dias 61–90', 'Ajustar e transferir a rotina', 'Indicadores comparáveis; revisão das falhas; gestores executando reuniões e controles; plano do próximo ciclo',
+      'Gestores conduzem as reuniões e os controles; ELOGA acompanha e ajusta', 'Comparativo antes e depois e rotina executada sem apoio diário'],
+  ];
+  const PARTICIPACAO = [
+    'Indicar um responsável interno pela implantação, com tempo reservado na agenda.',
+    'Enviar os dados e relatórios solicitados nos prazos combinados.',
+    'Garantir a presença dos decisores nas reuniões de acompanhamento.',
+    'Executar entre os encontros as rotinas definidas no plano de ação.',
+    'Validar cada entrega em até 5 dias úteis.',
+  ];
   const PASSOS = ['Escolha da opção e aceite desta proposta.', 'Assinatura do contrato.', 'Agendamento do encontro de início e envio dos dados para a linha de base.'];
 
   return html`
   ${capa('Proposta de', 'Consultoria', cliente, logo,
     html`<b>${cliente.name}</b>${cliente.contact_name ? ' · A/C ' + cliente.contact_name : ''}<br>${P.code ? 'Proposta nº ' + P.code + ' · ' : ''}Emitida em ${fmt(P.date)} · <b>Válida até ${fmt(validade)}</b>`)}
   <div class="page">
+    <div class="fluxo-prop avoid">${[['Devolutiva do diagnóstico', 'O que os dados e a sessão mostraram'], ['Plano de 90 dias', 'Entregas, responsáveis e critérios de conclusão'], ['Proposta comercial', 'Escopo, investimento e participação da clínica']]
+      .map(([t, d], i) => html`<div class="${i === 0 ? 'feito' : ''}"><span>${i + 1}</span><b>${t}</b><small>${d}</small></div>`)}</div>
     ${on('contexto') ? html`<h2><span class="num">${sec()}</span>Contexto e objetivo</h2>
+    <div class="objetivo-central avoid"><small>Objetivo da consultoria</small><p>${E('p_objetivo', `Dar à ${cliente.name || 'clínica'} condições para decidir preços, organizar agendas, acompanhar recebimentos e conduzir a jornada do paciente com processos que a equipe consiga executar.`)}</p>
+      <span>${E('p_objetivo_sub', 'Cada etapa está ligada às dificuldades apontadas na devolutiva e tem entrega verificável, o que torna o acompanhamento claro e mensurável.')}</span></div>
     <p>${E('p_ctx', `A partir do autodiagnóstico e da sessão de diagnóstico realizada em ${fmt(state.client.sessionDate)}, ${prio.length ? listaNatural(prio) + (prio.length > 1 ? ' foram identificadas como as frentes' : ' foi identificada como a frente') : 'a frente prioritária foi identificada como a frente'} de maior impacto para ${cliente.name || 'a clínica'} neste momento.`)}</p>
     ${achados.length ? html`<p><b>Pontos que motivam esta proposta:</b></p><ul class="ck">${achados.map((f) => html`<li>${f.t}${f.i ? html` <span class="hint">(${f.i})</span>` : ''}</li>`)}</ul>` : ''}
     ${state.matrix.goal3m.trim() ? html`<div class="callout"><b>Objetivo para os próximos 3 meses:</b> “${state.matrix.goal3m}”</div>` : ''}` : ''}
@@ -323,11 +349,22 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
     ${on('escopo') && frentes.length ? html`<h2><span class="num">${sec()}</span>Escopo de atuação</h2>
     ${frentes.map((k) => { const F = CATALOG.fronts[k]; return html`<div class="avoid" style="margin-bottom:14px"><h3>${F.name}</h3>
       <table class="t"><thead><tr><th style="width:50%">O que será trabalhado</th><th>O que a clínica recebe</th></tr></thead><tbody>
-      <tr><td><ul class="ck">${F.modules.map((m) => html`<li>${m}</li>`)}</ul></td><td><ul class="ck">${F.deliverables.map((m) => html`<li>${m}</li>`)}</ul>
-      <p style="margin-top:8px"><b>Indicadores acompanhados:</b> ${F.kpis.join(' · ')}</p></td></tr></tbody></table></div>`; })}` : ''}
+      <tr><td>${EL('p_esc_' + k + '_m', F.modules)}</td><td>${EL('p_esc_' + k + '_d', F.deliverables)}
+      <p style="margin-top:8px"><b>Indicadores acompanhados:</b> ${E('p_esc_' + k + '_k', F.kpis.join(' · '))}</p></td></tr></tbody></table></div>`; })}` : ''}
 
-    ${on('acompanhamento') && temPrograma ? html`<h2><span class="num">${sec()}</span>Como funciona o acompanhamento</h2>
-    <div class="jornada avoid">${ACOMP.map(([t, d], i) => html`<div class="etapa"><div class="seta"><span>${i + 1}</span>${t}</div><p>${E('pa_' + i, d)}</p></div>`)}</div>` : ''}
+    ${on('acompanhamento') ? html`<h2><span class="num">${sec()}</span>Como funciona o acompanhamento</h2>
+    ${temPrograma ? html`<div class="jornada avoid">${ACOMP.map(([t, d], i) => html`<div class="etapa"><div class="seta"><span>${i + 1}</span>${t}</div><p>${E('pa_' + i, d)}</p></div>`)}</div>` : ''}
+    <h3>Plano de 90 dias</h3>
+    <table class="t avoid cronograma"><thead><tr><th style="width:15%">Período</th><th style="width:27%">Foco</th><th>Entregas verificáveis</th></tr></thead><tbody>
+      ${CRONOGRAMA.map(([per, foco, entregas], i) => html`<tr><td><b>${E('p_cr' + i + '_per', per)}</b></td><td>${E('p_cr' + i + '_foco', foco)}</td><td>${EL('p_cr' + i + '_ent', entregas.split(';').map((x) => x.trim()).map((x) => x.charAt(0).toUpperCase() + x.slice(1)))}</td></tr>`)}
+    </tbody></table>
+    <table class="t avoid cronograma"><thead><tr><th style="width:15%">Período</th><th style="width:42%">Responsáveis</th><th>Critério de conclusão</th></tr></thead><tbody>
+      ${CRONOGRAMA.map(([per, , , resp, crit], i) => html`<tr><td><b>${state.report.edits['p_cr' + i + '_per'] ?? per}</b></td><td>${E('p_cr' + i + '_resp', resp)}</td><td>${E('p_cr' + i + '_crit', crit)}</td></tr>`)}
+    </tbody></table>` : ''}
+
+    ${on('participacao') ? html`<h2><span class="num">${sec()}</span>Participação esperada da clínica</h2>
+    <p>${E('p_part_intro', 'O resultado depende de execução conjunta. Para que o plano avance no prazo, a clínica se compromete a:')}</p>
+    ${EL('p_part', PARTICIPACAO)}` : ''}
 
     ${on('condicoes') ? html`<h2><span class="num">${sec()}</span>Condições</h2>
     <table class="t avoid"><tbody>
