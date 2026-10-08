@@ -5,7 +5,7 @@ import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, $$, debounce, fmtData, fmtDataHora, imprimirDocumento, nomeArquivo } from '../core/dom.js';
 import { avisar, avisarErro, confirmar, ocupado } from '../core/ui.js';
 import { COBRANCA_EXTRA, CATALOG, FRONT_KEYS, QB, QC, QD, CRIT, PH, estadoPadrao, mesclar, num, candidatas, sc, avaliar, semearOpcoes, somarDias,
-  DIAS, ESPECIALIDADES, COBRANCAS, SISTEMAS, NIVEL_SISTEMA, capacidade, recorrente, usaFrentes, normalizarEstado, especialidadesDe } from './operacional-modelo.js';
+  DIAS, ESPECIALIDADES, COBRANCAS, SISTEMAS, NIVEL_SISTEMA, capacidade, recorrente, usaFrentes, normalizarEstado, especialidadesDe, bonusDaProposta, valorOpcao } from './operacional-modelo.js';
 import { carregarCatalogo } from './catalogo.js';
 import { gerarRecomendacoes } from './recomendacoes.js';
 import { brl } from '../core/dom.js';
@@ -295,6 +295,43 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
     });
   }
 
+  // ------------------------------------------------------------ BÔNUS E OFERTA
+  function editorBonus() {
+    const P = state.proposal, B = CATALOG.bonus || {};
+    const total = bonusDaProposta(state).reduce((t, b) => t + b.valor, 0);
+    return html`<div class="card no-print"><div class="card-head"><div><h2>Bônus</h2><p>Marque os bônus desta proposta. Os textos vêm de “Programas e preços”; o valor de referência pode ser ajustado aqui.</p></div>
+      <div class="field" style="min-width:220px"><label>Bônus valem para</label><select data-k="proposal.bonusEm">
+        <option value="recomendada" ${P.bonusEm !== 'todas' ? html`selected` : ''}>Opção recomendada</option><option value="todas" ${P.bonusEm === 'todas' ? html`selected` : ''}>Todas as opções</option></select></div></div>
+      <div class="bonus-lista">${Object.entries(B).map(([k, b]) => { const sel = P.bonus[k] || {}; return html`<div class="bonus-linha ${sel.on ? 'on' : ''}">
+        <label class="check"><input type="checkbox" data-bonus-on="${k}" ${sel.on ? html`checked` : ''}> <span><b>${b.name}</b><br><span class="xs muted">${b.chamada || ''}</span></span></label>
+        <div class="field"><label>Valor de referência (R$)</label><input type="number" min="0" data-bonus-valor="${k}" value="${sel.valor ?? b.valor ?? ''}" ${sel.on ? '' : html`disabled`}></div>
+        <label class="check"><input type="checkbox" data-bonus-rapido="${k}" ${sel.rapido ? html`checked` : ''} ${sel.on ? '' : html`disabled`}> Só para decisão rápida</label></div>`; })}</div>
+      ${P.bonusExtras.map((x, i) => html`<div class="grid" style="grid-template-columns:1.2fr 2fr .7fr auto auto;gap:8px;align-items:end;margin-top:8px">
+        <div class="field"><label>Bônus avulso</label><input type="text" maxlength="120" data-k="proposal.bonusExtras.${i}.name" value="${x.name || ''}" placeholder="Nome do bônus"></div>
+        <div class="field"><label>Descrição</label><textarea rows="1" maxlength="1500" data-k="proposal.bonusExtras.${i}.desc">${x.desc || ''}</textarea></div>
+        <div class="field"><label>Valor (R$)</label><input type="number" min="0" data-k="proposal.bonusExtras.${i}.valor" data-num value="${x.valor ?? ''}"></div>
+        <label class="check" style="margin-bottom:10px"><input type="checkbox" data-chk="proposal.bonusExtras.${i}.rapido" ${x.rapido ? html`checked` : ''}> Decisão rápida</label>
+        <button type="button" class="btn sm ghost" data-remover-bonus-extra="${i}">Remover</button></div>`)}
+      <div class="toolbar" style="margin-top:10px"><button class="btn sm secondary" type="button" data-acao="mais-bonus">+ Bônus avulso</button>
+        <span class="small muted" style="margin-left:auto">Valor total em bônus: <b>${brl(total)}</b></span></div></div>`;
+  }
+
+  function editorOferta() {
+    const O = state.proposal.oferta;
+    const rec = state.proposal.options.find((o) => o.type && o.recommended) || state.proposal.options.find((o) => o.type);
+    const bonus = bonusDaProposta(state), invest = rec ? valorOpcao(rec) : 0, total = invest + bonus.reduce((t, b) => t + b.valor, 0);
+    return html`<div class="card no-print"><div class="card-head"><div><h2>Oferta especial</h2><p>Empilhamento de valor, bônus de decisão rápida, garantia e condição de pagamento. Aparece logo após o investimento.</p></div>
+      <label class="check"><input type="checkbox" data-chk="proposal.oferta.on" ${O.on ? html`checked` : ''}> <b>Incluir na proposta</b></label></div>
+      ${O.on ? html`<div class="grid g3">
+        <div class="field"><label>Título</label><input type="text" maxlength="120" data-k="proposal.oferta.titulo" value="${O.titulo}"></div>
+        <div class="field"><label>Prazo da decisão rápida</label><input type="date" data-k="proposal.oferta.prazo" value="${O.prazo}"><span class="hint">Vazio = validade da proposta</span></div>
+        <div class="field"><label>Resumo da oferta</label><div class="small" style="padding-top:6px">Valor entregue <b>${brl(total)}</b> · investimento <b>${brl(invest)}</b>${invest ? html` · <b>${(total / invest).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}×</b>` : ''}</div></div></div>
+        <div class="field" style="margin-top:10px"><label>Abertura</label><textarea rows="2" maxlength="600" data-k="proposal.oferta.intro">${O.intro}</textarea></div>
+        ${[['garantia', 'Garantia'], ['pagamento', 'Condição de pagamento'], ['vagas', 'Vagas limitadas']].map(([k, r]) => html`<div class="grid" style="grid-template-columns:200px 1fr;gap:10px;align-items:start;margin-top:10px">
+          <label class="check" style="margin-top:8px"><input type="checkbox" data-chk="proposal.oferta.${k}.on" ${O[k].on ? html`checked` : ''}> ${r}</label>
+          <textarea rows="2" maxlength="600" data-k="proposal.oferta.${k}.texto" ${O[k].on ? '' : html`disabled`}>${O[k].texto}</textarea></div>`)}` : ''}</div>`;
+  }
+
   function proposta() {
     semearOpcoes(state);
     const P = state.proposal;
@@ -328,6 +365,8 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
           <button type="button" class="btn sm ghost" data-remover-secao="${i}">Remover</button></div>`)}
         <button class="btn sm secondary" type="button" data-acao="mais-secao">+ Adicionar seção</button>
       </div>
+      ${editorBonus()}
+      ${editorOferta()}
       <div class="card tight no-print"><div class="card-head" style="margin-bottom:8px"><div><h3 style="margin:0">Seções da proposta</h3>
         <p>Desmarque o que não deve entrar no PDF. Os textos com contorno podem ser editados direto no documento.</p></div></div>
         <div class="chips">${SECOES_PROPOSTA.map(([id, nome]) => html`<label class="chip"><input type="checkbox" data-secao-prop="${id}" ${secaoPropostaAtiva(state, id) ? html`checked` : ''}>${nome}</label>`)}</div></div>
@@ -364,6 +403,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         if (aba === 'preparacao' && /auto\.pillars/.test(t.dataset.k)) { /* candidatas mudam: redesenha ao sair do campo */ } }
       if (t.dataset.ed) { state.report.edits[t.dataset.ed] = t.innerText; mudou(); }
       if (t.dataset.edk) { set(t.dataset.edk, t.innerText.trim()); mudou(); }
+      if (t.dataset.bonusValor) { const b = state.proposal.bonus[t.dataset.bonusValor] ||= {}; b.valor = t.value === '' ? null : +t.value; mudou(); }
       if (t.dataset.preco) { const [i, k] = t.dataset.preco.split('|'); state.proposal.options[+i].prices[k] = t.value; mudou(); }
       if (t.dataset.opMeses) { state.proposal.options[+t.dataset.opMeses].months = Math.max(CATALOG.minMonths, +t.value || CATALOG.minMonths); mudou(); }
     }, o);
@@ -374,7 +414,10 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       if (t.dataset.secao) { state.report.secoes = { ...(state.report.secoes || {}), [t.dataset.secao]: t.checked }; mudou(); redesenhar(); return; }
       if (t.dataset.secaoProp) { state.proposal.secoes = { ...(state.proposal.secoes || {}), [t.dataset.secaoProp]: t.checked }; mudou(); redesenhar(); return; }
       if (t.hasAttribute('data-redesenhar')) { redesenhar(); return; }
-      if (t.dataset.k && (t.tagName === 'SELECT' || /auto\.pillars|proposal\.(extras|infoAdicional|onsite|payment|secoesExtras)/.test(t.dataset.k))) redesenhar();
+      if (t.dataset.k && (t.tagName === 'SELECT' || /auto\.pillars|proposal\.(extras|infoAdicional|onsite|payment|secoesExtras|bonusExtras|oferta)/.test(t.dataset.k))) redesenhar();
+      if (t.dataset.bonusOn) { const b = state.proposal.bonus[t.dataset.bonusOn] ||= {}; b.on = t.checked; mudou(); redesenhar(); return; }
+      if (t.dataset.bonusRapido) { const b = state.proposal.bonus[t.dataset.bonusRapido] ||= {}; b.rapido = t.checked; mudou(); redesenhar(); return; }
+      if (t.dataset.bonusValor) redesenhar();
       if (t.dataset.preco || t.dataset.opMeses) redesenhar();
       if (t.dataset.opTipo) {
         const op = state.proposal.options[+t.dataset.opTipo]; op.type = t.value;
@@ -406,6 +449,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       if (b.dataset.removerRec) { state.matrix.quickwins.splice(+b.dataset.removerRec, 1); mudou(); redesenhar(); return; }
       if (b.dataset.maisCampo) { state.session.extras.push({ titulo: '', valor: '', pilar: b.dataset.maisCampo, on: true }); mudou(); redesenhar(); return; }
       if (b.dataset.removerCampo) { state.session.extras.splice(+b.dataset.removerCampo, 1); mudou(); redesenhar(); return; }
+      if (b.dataset.removerBonusExtra) { state.proposal.bonusExtras.splice(+b.dataset.removerBonusExtra, 1); mudou(); redesenhar(); return; }
       if (b.dataset.removerSecao) { state.proposal.secoesExtras.splice(+b.dataset.removerSecao, 1); mudou(); redesenhar(); return; }
       if (b.dataset.frente) { const a = state.session.fronts, k = b.dataset.frente, i = a.indexOf(k); i > -1 ? a.splice(i, 1) : a.push(k); mudou(); redesenhar(); return; }
       if (b.dataset.nota) { const [k, c, nn] = b.dataset.nota.split('|'); const s = sc(state, k); s[c] = s[c] === +nn ? null : +nn; mudou(); redesenhar(); return; }
@@ -438,6 +482,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
             for (const k of Object.keys(state.report.edits)) if (!/^(p_|pa_|pc_|pp_)/.test(k)) delete state.report.edits[k];
             mudou(); redesenhar();
           } break;
+        case 'mais-bonus': state.proposal.bonusExtras.push({ name: '', desc: '', valor: '', rapido: false }); mudou(); redesenhar(); break;
         case 'mais-secao': state.proposal.secoesExtras.push({ titulo: '', texto: '', on: true }); mudou(); redesenhar(); break;
         case 'atualizar-doc': redesenhar(); avisar('Documento atualizado.'); break;
         case 'pdf-relatorio': await ocupado(b, gerarRelatorio); break;
@@ -470,6 +515,7 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
       const code = await q(db.rpc('admin_next_proposal_code'));
       state.proposal.code = code;
       const snapshot = structuredClone(state);
+      snapshot.proposal.bonusSnapshot = bonusDaProposta(state); // textos e valores dos bônus congelados na emissão
       await q(db.from('proposals').insert({ client_id: cliente.id, diagnosis_id: registro?.id ?? null, code, issued_at: state.proposal.date,
         valid_until: somarDias(state.proposal.date, state.proposal.validity), snapshot }));
       sujo = true; await gravar();

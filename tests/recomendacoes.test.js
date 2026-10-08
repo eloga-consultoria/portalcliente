@@ -42,3 +42,18 @@ test('ocupação ideal: meta, lacuna e receita da lacuna', () => {
   assert.ok(acima.lacuna < 0);
   assert.equal(acima.receitaLacuna, null);
 });
+
+test('bônus da proposta: catálogo, valor ajustado, avulso e decisão rápida', async () => {
+  const { bonusDaProposta, valorOpcao, normalizarEstado } = await import('../assets/js/admin/operacional-modelo.js');
+  const s = normalizarEstado(estado());
+  s.proposal.bonus = { plano: { on: true }, scripts: { on: true, valor: 500, rapido: true }, cartao: { on: false } };
+  s.proposal.bonusExtras = [{ name: 'Mentoria extra', valor: 300 }, { name: '  ', valor: 900 }];
+  const b = bonusDaProposta(s);
+  assert.deepEqual(b.map((x) => x.id), ['plano', 'scripts', 'x0']);
+  assert.equal(b.find((x) => x.id === 'scripts').valor, 500);
+  assert.equal(b.find((x) => x.id === 'scripts').rapido, true);
+  assert.equal(b.find((x) => x.id === 'plano').valor, 1500);
+  s.proposal.bonusSnapshot = [{ id: 'plano', name: 'Congelado', valor: 1, items: [] }];
+  assert.equal(bonusDaProposta(s)[0].name, 'Congelado');
+  assert.equal(valorOpcao({ type: 'programa', fronts: ['fat'], months: 3, prices: { pr_fat: 2000 }, system: false }), 6000);
+});

@@ -1,7 +1,7 @@
 // Relatório de Diagnóstico (integrado: autodiagnóstico + sessão de 45 min) e Proposta comercial.
 // Layout fiel ao modelo aprovado "ELOGA | Diagnóstico Operacional". Saída: HTML seguro para tela e impressão.
 import { html, confiavel } from '../core/dom.js';
-import { COBRANCA_EXTRA, CATALOG, FRONT_KEYS, QC, CRIT, num, avaliar, candidatas, situacaoDados, precoOpcao, semearOpcoes, somarDias, capacidade, DIAS, recorrente, recTexto, recAtiva, minutosDeAtendimento } from '../admin/operacional-modelo.js';
+import { COBRANCA_EXTRA, CATALOG, FRONT_KEYS, QC, CRIT, num, avaliar, candidatas, situacaoDados, precoOpcao, semearOpcoes, somarDias, capacidade, DIAS, recorrente, recTexto, recAtiva, minutosDeAtendimento, bonusDaProposta, valorOpcao } from '../admin/operacional-modelo.js';
 import { LEVELS, READ, levelOf } from '../import/autodiagnostico-modelo.js';
 import { ROTULOS_CAMPOS, limparItem } from '../import/leitores.js';
 
@@ -246,7 +246,7 @@ export function relatorioHtml({ state, cliente, autodiag, logo, editavel = true 
 }
 
 // ===================================================================== PROPOSTA
-function cartaoOpcao(o, i) {
+function cartaoOpcao(o, i, bonus = []) {
   const f = CATALOG.formats[o.type]; if (!f) return '';
   const pr = precoOpcao(o), frs = (f.frentesFixas ? [] : o.fronts).map((k) => CATALOG.fronts[k].name);
   let preco, sub;
@@ -261,14 +261,15 @@ function cartaoOpcao(o, i) {
   return html`<div class="opt ${o.recommended ? 'rec' : ''} avoid">${o.recommended ? html`<span class="rib">RECOMENDADA</span>` : ''}
     <div class="sub">Opção ${i + 1}</div><h4>${f.name}</h4><p class="sub">${f.desc}</p>
     <div class="price">${preco}</div><p class="sub">${sub}</p>
-    <ul class="ck" style="font-size:12.5px">${itens.map((x) => html`<li>${x}</li>`)}</ul></div>`;
+    <ul class="ck" style="font-size:12.5px">${itens.map((x) => html`<li>${x}</li>`)}</ul>
+    ${bonus.length ? html`<div class="opt-bonus"><b>+ ${bonus.length} bônus inclus${bonus.length > 1 ? 'os' : 'o'}</b> · ${brl(bonus.reduce((t, b) => t + b.valor, 0))} em valor<br><span>${bonus.map((b) => b.name).join(' · ')}</span></div>` : ''}</div>`;
 }
 
 /** Seções da proposta. A administradora escolhe quais entram no PDF. */
 export const SECOES_PROPOSTA = [
   ['contexto', 'Contexto e objetivo'], ['escopo', 'Escopo de atuação'], ['acompanhamento', 'Como funciona o acompanhamento'],
-  ['condicoes', 'Condições'], ['adicionais', 'Seções adicionais'], ['investimento', 'Investimento (opções)'],
-  ['custos', 'Custos adicionais'], ['proximos', 'Próximos passos'], ['aceite', 'Aceite (assinaturas)'],
+  ['condicoes', 'Condições'], ['adicionais', 'Seções adicionais'], ['bonus', 'Bônus exclusivos'], ['investimento', 'Investimento (opções)'],
+  ['oferta', 'Oferta especial'], ['custos', 'Custos adicionais'], ['proximos', 'Próximos passos'], ['aceite', 'Aceite (assinaturas)'],
 ];
 export const secaoPropostaAtiva = (state, id) => (state.proposal.secoes || {})[id] !== false;
 const nomesFrentes = (ks) => ks.map((k) => CATALOG.fronts[k]?.name).filter(Boolean);
@@ -287,6 +288,14 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
   const on = (id) => secaoPropostaAtiva(state, id);
   const prio = nomesFrentes(ev.fronts).map((x) => x.toLowerCase());
   let n = 0; const sec = () => ++n;
+  const bonus = bonusDaProposta(state);
+  const bonusFixos = bonus.filter((b) => !b.rapido), bonusRapidos = bonus.filter((b) => b.rapido);
+  const rec = opts.find((o) => o.recommended) || opts[0];
+  const bonusDaOpcao = (o) => (P.bonusEm === 'todas' || o === rec ? bonus : []);
+  const O = P.oferta || {};
+  const prazoRapido = O.prazo || validade;
+  const invest = rec ? valorOpcao(rec) : 0;
+  const totalEntregue = invest + bonus.reduce((t, b) => t + b.valor, 0);
 
   const ACOMP = [
     ['Linha de base', 'Medição inicial dos indicadores da frente para comparar o antes e o depois.'],
@@ -313,9 +322,7 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
       <p style="margin-top:8px"><b>Indicadores acompanhados:</b> ${F.kpis.join(' · ')}</p></td></tr></tbody></table></div>`; })}` : ''}
 
     ${on('acompanhamento') && temPrograma ? html`<h2><span class="num">${sec()}</span>Como funciona o acompanhamento</h2>
-    <table class="t avoid"><thead><tr><th style="width:24%">Etapa</th><th>O que acontece</th></tr></thead><tbody>
-      ${ACOMP.map(([t, d], i) => html`<tr><td><b>${t}</b></td><td>${E('pa_' + i, d)}</td></tr>`)}
-    </tbody></table>` : ''}
+    <div class="jornada avoid">${ACOMP.map(([t, d], i) => html`<div class="etapa"><div class="seta"><span>${i + 1}</span>${t}</div><p>${E('pa_' + i, d)}</p></div>`)}</div>` : ''}
 
     ${on('condicoes') ? html`<h2><span class="num">${sec()}</span>Condições</h2>
     <table class="t avoid"><tbody>
@@ -330,8 +337,29 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
     ${on('adicionais') ? adicionais.map((x) => html`<h2><span class="num">${sec()}</span>${x.titulo || 'Informações'}</h2>
       <p style="white-space:pre-line">${x.texto || ''}</p>`) : ''}
 
+    ${on('bonus') && bonus.length ? html`<h2><span class="num">${sec()}</span>Bônus exclusivos</h2>
+    <p>${E('pb_intro', P.bonusEm === 'todas' ? 'Ferramentas prontas que aceleram a implantação e ficam com a clínica, incluídas em qualquer opção:' : 'Ferramentas prontas que aceleram a implantação e ficam com a clínica, incluídas na opção recomendada:')}</p>
+    <div class="bonus-grid">${bonus.map((b) => html`<div class="bonus avoid ${b.rapido ? 'rapido' : ''}">
+      <div class="b-topo"><span class="b-selo">${b.rapido ? 'Decisão rápida' : 'Bônus'}</span><span class="b-valor">${b.valor ? html`<s>${brl(b.valor)}</s> ` : ''}<b>incluso</b></span></div>
+      <h4>${b.name}</h4>${b.chamada ? html`<p class="b-chamada">${b.chamada}</p>` : ''}
+      ${b.desc ? html`<p class="b-desc">${b.desc}</p>` : ''}
+      ${b.items.length ? html`<ul class="ck">${b.items.map((x) => html`<li>${x}</li>`)}</ul>` : ''}</div>`)}</div>
+    ${bonusRapidos.length ? html`<p class="hint">Bônus de decisão rápida válidos para aceite até <b>${fmt(prazoRapido)}</b>.</p>` : ''}` : ''}
+
     ${on('investimento') ? html`<h2><span class="num">${sec()}</span>Investimento</h2>
-    ${opts.length ? html`<div class="opts">${P.options.map((o, i) => cartaoOpcao(o, i))}</div>` : html`<p class="empty">Monte as opções no painel acima.</p>`}` : ''}
+    ${opts.length ? html`<div class="opts">${P.options.map((o, i) => cartaoOpcao(o, i, o.type ? bonusDaOpcao(o) : []))}</div>` : html`<p class="empty">Monte as opções no painel acima.</p>`}` : ''}
+
+    ${on('oferta') && O.on && rec ? html`<div class="oferta avoid">
+      <div class="of-topo"><small>Oferta especial</small><h3>${E('of_titulo', O.titulo || 'Condição especial')}</h3>${O.intro ? html`<p>${E('of_intro', O.intro)}</p>` : ''}</div>
+      <table class="of-pilha"><tbody>
+        <tr><td>${CATALOG.formats[rec.type]?.name || 'Programa'}${rec.fronts.length && !CATALOG.formats[rec.type]?.frentesFixas ? ` · ${nomesFrentes(rec.fronts).join(', ')}` : ''}</td><td>${brl(invest)}</td></tr>
+        ${bonusFixos.map((b) => html`<tr><td>Bônus · ${b.name}</td><td>${brl(b.valor)}</td></tr>`)}
+        ${bonusRapidos.map((b) => html`<tr class="rapido"><td>Bônus de decisão rápida · ${b.name} <span>(aceite até ${fmt(prazoRapido)})</span></td><td>${brl(b.valor)}</td></tr>`)}
+        <tr class="tot"><td>Valor total entregue</td><td><s>${brl(totalEntregue)}</s></td></tr>
+        <tr class="inv"><td>Seu investimento</td><td>${brl(invest)}${invest && totalEntregue > invest ? html`<span>${(totalEntregue / invest).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}× o valor investido</span>` : ''}</td></tr>
+      </tbody></table>
+      <div class="of-garantias">${[['garantia', '✓'], ['pagamento', 'R$'], ['vagas', '!']].filter(([k]) => O[k]?.on && String(O[k].texto || '').trim()).map(([k, ic]) => html`<div><i>${ic}</i><p>${E('of_' + k, O[k].texto)}</p></div>`)}</div>
+    </div>` : ''}
     ${on('custos') && extras.length ? html`<div class="avoid"><h3 style="margin-top:18px">Custos adicionais</h3>
       <table class="t"><thead><tr><th>Descrição</th><th style="width:22%">Cobrança</th><th style="width:20%;text-align:right">Valor</th></tr></thead><tbody>
         ${extras.map((x) => html`<tr><td>${x.desc}</td><td>${(COBRANCA_EXTRA.find(([v]) => v === x.cobranca) || COBRANCA_EXTRA[0])[1]}</td><td style="text-align:right"><b>${brl2(x.valor)}</b></td></tr>`)}

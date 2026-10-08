@@ -53,7 +53,34 @@ export const CATALOG = {
   system: { name:'Implantação de sistema (CRM ou agendamento)', price:3000,
             items:['Desenho do funil e das etapas','Campos obrigatórios e regras de registro','Configuração funcional do sistema','POPs, ITs e scripts no sistema','Treinamento da equipe','Acompanhamento da adoção por 3 meses'],
             outside:['Integrações via API, WhatsApp API oficial, automações complexas e migração de base são executadas pelo parceiro de tecnologia, com orçamento próprio'] },
-  minMonths:3
+  minMonths:3,
+  // Bônus: produtos que agregam valor à consultoria. "valor" é o valor de referência (ancoragem da oferta).
+  bonus: {
+    plano: { name:'Plano de Ação Integrado no Portal', chamada:'Seu plano vivo, acompanhado semana a semana', valor:1500,
+      desc:'Cada ação do diagnóstico vira tarefa com responsável, prazo, meta e status, visível para a gestão e para a ELOGA no portal da clínica. Nada se perde entre um encontro e outro: o avanço é medido, os atrasos aparecem cedo e as decisões são tomadas sobre fatos.',
+      items:['Ações com responsável, data de entrega e meta mensurável','Ciclo PDCA: planejar, executar, checar e ajustar','Painel de andamento por frente e por responsável','Revisão do plano em cada encontro de acompanhamento'] },
+    jornada: { name:'E-book Jornada do Paciente e da Família', chamada:'Cada ponto de contato desenhado para reter', valor:497,
+      desc:'Mapa completo do primeiro contato à alta, com o que a família precisa ouvir, receber e sentir em cada etapa. Padroniza a experiência, reduz a evasão nos primeiros 90 dias e transforma famílias satisfeitas em indicação.',
+      items:['Mapa das etapas e dos momentos críticos','Checklist por etapa para a equipe','Mensagens-modelo para os marcos do tratamento'] },
+    scripts: { name:'Scripts de Atendimento e Conversão', chamada:'Do primeiro contato à avaliação agendada', valor:697,
+      desc:'Roteiros para WhatsApp e telefone: primeira resposta, qualificação, apresentação do plano terapêutico, objeções de preço e reativação de quem não agendou. A conversão deixa de depender de quem atende e passa a seguir um método.',
+      items:['Script de primeiro contato e qualificação','Respostas às principais objeções','Roteiro de apresentação do plano de tratamento','Sequência de follow-up e reativação'] },
+    cartao: { name:'Cartão de Agendamento Personalizado', chamada:'Compromisso visível, menos faltas', valor:297,
+      desc:'Cartão com a identidade da clínica, os horários fixos do paciente e as regras de falta, reposição e cancelamento. Simples e decisivo: a família leva para casa o combinado e a agenda ganha previsibilidade.',
+      items:['Arte com a identidade visual da clínica','Versões impressa e digital (WhatsApp)','Política de faltas e reposições em linguagem acolhedora'] },
+    planilhas: { name:'Planilhas Automatizadas de Indicadores', chamada:'A equipe registra, os indicadores aparecem sozinhos', valor:997,
+      desc:'Planilhas prontas, com campos guiados, que calculam automaticamente ocupação, faltas, conversão, faturamento, glosa e margem. A gestão recebe os números sem fórmulas, sem retrabalho e sem depender de sistemas caros.',
+      items:['Campos guiados e validados','Indicadores calculados automaticamente','Guia de preenchimento para a equipe'] },
+    dashboard: { name:'Dashboard Personalizado da Clínica', chamada:'A operação inteira em uma tela', valor:1997,
+      desc:'Painel com os dados reais da clínica, alimentado pelos relatórios que os sistemas atuais já emitem ou pelas planilhas do Kit Organizacional, sem trocar de sistema. Receita, agenda, conversão e qualidade lado a lado para decidir com rapidez e segurança.',
+      items:['Leitura dos relatórios exportados pelos sistemas já utilizados','Integração com as planilhas do Kit Organizacional','Indicadores por unidade, profissional e convênio','Atualização simples, sem conhecimento técnico'] },
+    marca: { name:'Ficha de Posicionamento da Marca', chamada:'Redes sociais que atraem o paciente certo', valor:597,
+      desc:'Diagnóstico do posicionamento da clínica que define público, tom de voz, diferenciais e os formatos de conteúdo com maior potencial: educativo, prova social, bastidores e autoridade. O conteúdo deixa de ser improviso e passa a gerar contatos qualificados.',
+      items:['Ficha diagnóstica de posicionamento','Direcionamento de formatos e temas de postagem','Linha editorial inicial para 30 dias'] },
+    termos: { name:'Modelos de Termos por Forma de Adesão', chamada:'Segurança jurídica em cada contrato', valor:797,
+      desc:'Termos de adesão e consentimento para cada forma de entrada do paciente: particular, convênio, liminar judicial e reembolso. Regras de pagamento, faltas, reposições, cancelamento e LGPD claras desde o primeiro dia, reduzindo conflitos e inadimplência.',
+      items:['Termo para atendimento particular e pacotes','Termos para convênio e para liminar judicial','Termo para reembolso','Cláusulas de faltas, cancelamento e LGPD (validação pelo jurídico da clínica recomendada)'] },
+  },
 };
 export const FRONT_KEYS = ['fat','fin','com','age','exp','reg'];
 export const CATALOGO_PADRAO = JSON.parse(JSON.stringify(CATALOG));
@@ -106,8 +133,31 @@ export const estadoPadrao = () => ({
   report: { edits: {} },
   proposal: { date: hoje(), validity: 15, code: '', onsite: 0, payment: 'Mensal, via PIX ou boleto, com vencimento no dia 10',
     options: [{ type: '', fronts: [], months: 3, system: false, recommended: true, prices: {} }, { type: '', fronts: [], months: 3, system: false, recommended: false, prices: {} }],
-    extras: [], infoAdicional: '', secoes: {}, secoesExtras: [] },
+    extras: [], infoAdicional: '', secoes: {}, secoesExtras: [],
+    bonus: {}, bonusExtras: [], bonusEm: 'recomendada', oferta: ofertaPadrao() },
 });
+
+/** Oferta especial: empilhamento de valor, bônus de decisão rápida, garantia, vagas e condição de pagamento. */
+export const ofertaPadrao = () => ({ on: false, titulo: 'Condição especial de implantação', prazo: '',
+  intro: 'Não se trata de juntar serviços e dar desconto: é um pacote completo para aumentar a conversão, o ticket médio e o faturamento da clínica, com as ferramentas que a equipe usa no dia a dia.',
+  garantia: { on: true, texto: 'Garantia de entrega: se a linha de base dos indicadores não for apresentada em até 30 dias após o envio completo dos dados, a ELOGA segue com o acompanhamento sem custo até a entrega.' },
+  vagas: { on: false, texto: 'Para preservar a qualidade do acompanhamento, a ELOGA inicia no máximo 3 novas clínicas por mês.' },
+  pagamento: { on: true, texto: 'A primeira mensalidade vence somente após o encontro de início.' } });
+
+/** Bônus marcados na proposta (catálogo + bônus avulsos), com o valor de referência usado. */
+export function bonusDaProposta(state) {
+  const P = state.proposal;
+  if (Array.isArray(P.bonusSnapshot)) return P.bonusSnapshot; // proposta emitida: textos congelados
+  const doCatalogo = Object.entries(P.bonus || {}).filter(([k, b]) => b?.on && CATALOG.bonus?.[k]).map(([k, b]) => {
+    const c = CATALOG.bonus[k];
+    return { id: k, name: c.name, chamada: c.chamada || '', desc: c.desc || '', items: [...(c.items || [])], valor: b.valor != null && b.valor !== '' ? +b.valor : +c.valor || 0, rapido: !!b.rapido };
+  });
+  const avulsos = (P.bonusExtras || []).filter((b) => String(b.name || '').trim()).map((b, i) => ({ id: 'x' + i, name: b.name.trim(), chamada: b.chamada || '', desc: b.desc || '', items: [], valor: +b.valor || 0, rapido: !!b.rapido }));
+  return [...doCatalogo, ...avulsos];
+}
+
+/** Valor total de uma opção no período (pagamento único + mensalidades × meses). */
+export function valorOpcao(o) { const p = precoOpcao(o); return p.once + p.monthly * p.months; }
 
 /** Ajusta estados salvos em versões anteriores (recomendações em texto, frente única). */
 export function normalizarEstado(state) {
@@ -120,6 +170,9 @@ export function normalizarEstado(state) {
   state.report.ocultos = state.report.ocultos && typeof state.report.ocultos === 'object' ? state.report.ocultos : {};
   state.session.ctx.esp = state.session.ctx.esp && typeof state.session.ctx.esp === 'object' ? state.session.ctx.esp : {};
   state.proposal.secoesExtras = Array.isArray(state.proposal.secoesExtras) ? state.proposal.secoesExtras : [];
+  state.proposal.bonus = state.proposal.bonus && typeof state.proposal.bonus === 'object' && !Array.isArray(state.proposal.bonus) ? state.proposal.bonus : {};
+  state.proposal.bonusExtras = Array.isArray(state.proposal.bonusExtras) ? state.proposal.bonusExtras : [];
+  state.proposal.oferta = mesclar(ofertaPadrao(), state.proposal.oferta && typeof state.proposal.oferta === 'object' ? state.proposal.oferta : {});
   return state;
 }
 /** Texto e inclusão de uma recomendação (aceita o formato antigo, só texto). */
@@ -211,6 +264,7 @@ export function aplicarCatalogo(salvo) {
   if (salvo.fronts) for (const k of Object.keys(CATALOG.fronts)) if (salvo.fronts[k]) Object.assign(CATALOG.fronts[k], salvo.fronts[k]);
   if (salvo.formats) { for (const k of Object.keys(CATALOG.formats)) if (!salvo.formats[k]) delete CATALOG.formats[k]; Object.assign(CATALOG.formats, salvo.formats); }
   if (salvo.system) Object.assign(CATALOG.system, salvo.system);
+  if (salvo.bonus && typeof salvo.bonus === 'object') CATALOG.bonus = salvo.bonus;
   if (salvo.minMonths) CATALOG.minMonths = +salvo.minMonths;
 }
 

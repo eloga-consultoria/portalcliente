@@ -122,6 +122,44 @@
 .doc .cam-cta span{font-size:13px;color:var(--d-navy)}
 @media(max-width:720px){.doc .cam-grid,.doc .kpis.k4{grid-template-columns:1fr}.doc .cam-grid>div{border-right:0;border-bottom:1px solid var(--d-line)}}
 
+/* ---------- proposta: jornada, bônus e oferta ---------- */
+.doc .jornada{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:10px 0}
+.doc .jornada .seta{background:var(--d-navy);color:#fff;font-weight:700;font-size:12.5px;padding:10px 18px 10px 14px;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 50%,calc(100% - 12px) 100%,0 100%,10px 50%);min-height:52px;display:flex;align-items:center;gap:6px}
+.doc .jornada .etapa:first-child .seta{clip-path:polygon(0 0,calc(100% - 12px) 0,100% 50%,calc(100% - 12px) 100%,0 100%)}
+.doc .jornada .etapa:nth-child(even) .seta{background:var(--d-purple)}
+.doc .jornada .seta span{display:inline-grid;place-items:center;min-width:20px;height:20px;border-radius:50%;background:var(--d-lime);color:var(--d-navy);font-size:11px;font-weight:800}
+.doc .jornada p{font-size:12px;color:#33404c;margin:8px 4px 0;line-height:1.5}
+.doc .bonus-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}
+.doc .bonus{border:1px solid var(--d-line);border-top:4px solid var(--d-purple);border-radius:12px;padding:14px 16px;background:#fff}
+.doc .bonus.rapido{border-top-color:var(--d-lime);background:#fbffe9}
+.doc .bonus .b-topo{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.doc .bonus .b-selo{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#fff;background:var(--d-purple);border-radius:20px;padding:2px 9px}
+.doc .bonus.rapido .b-selo{background:var(--d-navy);color:var(--d-lime)}
+.doc .bonus .b-valor{font-size:12px;color:var(--d-muted)} .doc .bonus .b-valor b{color:var(--ok)}
+.doc .bonus h4{font-family:var(--serif);font-weight:400;font-size:18px;color:var(--d-navy);margin:8px 0 2px}
+.doc .bonus .b-chamada{font-weight:700;color:var(--d-purple);font-size:13px;margin:0 0 6px}
+.doc .bonus .b-desc{font-size:12.5px;margin:0 0 6px;line-height:1.55}
+.doc .bonus ul.ck{font-size:12px}
+.doc .opt-bonus{margin-top:10px;padding:8px 10px;border-radius:8px;background:#f6f3ff;font-size:12px;color:var(--d-navy)}
+.doc .opt-bonus b{color:var(--d-purple)} .doc .opt-bonus span{color:var(--d-muted)}
+.doc .oferta{border-radius:16px;overflow:hidden;border:2px solid var(--d-purple);margin:18px 0}
+.doc .of-topo{background:var(--d-navy);color:#fff;padding:18px 22px}
+.doc .of-topo small{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--d-lime)}
+.doc .of-topo h3{font-family:var(--serif);font-weight:400;font-size:24px;color:#fff;margin:4px 0 6px}
+.doc .of-topo p{margin:0;color:#d7e1ea;font-size:13px}
+.doc table.of-pilha{width:100%;border-collapse:collapse;font-size:13px}
+.doc .of-pilha td{padding:9px 22px;border-bottom:1px solid var(--d-line)}
+.doc .of-pilha td:last-child{text-align:right;white-space:nowrap;width:30%}
+.doc .of-pilha tr.rapido td{background:#fbffe9} .doc .of-pilha tr.rapido span{color:var(--d-muted);font-size:11.5px}
+.doc .of-pilha tr.tot td{font-weight:700;color:var(--d-muted);border-top:2px solid var(--d-navy)}
+.doc .of-pilha tr.inv td{background:#f6f3ff;font-size:17px;font-weight:800;color:var(--d-purple);border-bottom:0}
+.doc .of-pilha tr.inv span{display:block;font-size:11.5px;font-weight:700;color:var(--d-navy)}
+.doc .of-garantias{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;padding:14px 22px;background:#fff}
+.doc .of-garantias>div{display:flex;gap:10px;align-items:flex-start}
+.doc .of-garantias i{flex:0 0 26px;height:26px;border-radius:50%;background:var(--d-lime);color:var(--d-navy);font-style:normal;font-weight:800;font-size:11px;display:grid;place-items:center}
+.doc .of-garantias p{margin:0;font-size:12.5px}
+@media(max-width:720px){.doc .jornada,.doc .bonus-grid{grid-template-columns:1fr}.doc .jornada .seta{clip-path:none;border-radius:8px}}
+
 /* ---------- impressão: o documento é copiado para #impressao e só ele sai no papel ---------- */
 #impressao{display:none}
 @media print{
@@ -158,6 +196,9 @@
   #impressao .doc .cam-grid>div{border-right:1px solid #dfe5ec;border-bottom:0;padding-left:20px}
   #impressao .caminho{break-inside:avoid}
   #impressao .doc .opt{padding:14px}
+  #impressao .doc .jornada{grid-template-columns:repeat(5,1fr)!important}
+  #impressao .doc .bonus-grid{grid-template-columns:1fr 1fr!important}
+  #impressao .bonus,#impressao .oferta{break-inside:avoid}
   #impressao .doc .opt .price{font-size:22px}
   #impressao .editable{outline:0!important}
 }

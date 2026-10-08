@@ -44,6 +44,18 @@ export async function render(el) {
           <div class="field"><label>Indicadores</label><textarea rows="6" data-f="kpis">${linhas(fr.kpis)}</textarea></div>
         </div></details>`; })}</div></div>
 
+    <div class="card" style="margin-bottom:16px"><div class="card-head"><div><h2>Bônus</h2><p>Produtos que você pode incluir nas propostas. O valor de referência compõe o “valor total entregue” da oferta.</p></div>
+      <button class="btn sm purple" type="button" data-acao="novo-bonus">+ Novo bônus</button></div>
+      <div class="stack">${Object.entries(cat.bonus || {}).map(([k, b]) => html`<details class="opt-editor" data-bonus="${k}"><summary style="cursor:pointer"><b>${b.name || 'Novo bônus'}</b> <span class="xs muted">· valor de referência R$ ${Number(b.valor || 0).toLocaleString('pt-BR')}</span></summary>
+        <div class="grid g4" style="margin-top:10px">
+          <div class="field span-2"><label>Nome</label><input data-f="name" value="${b.name || ''}"></div>
+          <div class="field"><label>Valor de referência (R$)</label><input type="number" min="0" data-f="valor" value="${b.valor ?? ''}"></div>
+          <div class="field" style="align-self:end"><button class="btn sm danger" type="button" data-remover-bonus="${k}">Remover</button></div>
+          <div class="field" style="grid-column:1/-1"><label>Chamada (frase de impacto)</label><input data-f="chamada" value="${b.chamada || ''}"></div>
+          <div class="field" style="grid-column:1/-1"><label>Descrição</label><textarea rows="3" data-f="desc">${b.desc || ''}</textarea></div>
+          <div class="field" style="grid-column:1/-1"><label>O que inclui (um item por linha)</label><textarea rows="4" data-f="items">${linhas(b.items)}</textarea></div>
+        </div></details>`)}</div></div>
+
     <div class="grid g2">
       <div class="card"><h2>Implantação de sistema</h2><div class="stack" data-sistema>
         <div class="field"><label>Nome</label><input data-f="name" value="${cat.system.name}"></div>
@@ -68,6 +80,12 @@ export async function render(el) {
       $$('[data-f]', box).forEach((i) => { const k = i.dataset.f; fr[k] = ['modules', 'deliverables', 'kpis'].includes(k) ? deLinhas(i.value) : k === 'monthly' ? +i.value || 0 : i.value.trim(); });
     });
     $$('[data-sistema] [data-f]', el).forEach((i) => { const k = i.dataset.f; novo.system[k] = ['items', 'outside'].includes(k) ? deLinhas(i.value) : k === 'price' ? +i.value || 0 : i.value.trim(); });
+    novo.bonus = {};
+    $$('[data-bonus]', el).forEach((box) => {
+      const b = {};
+      $$('[data-f]', box).forEach((i) => { const k = i.dataset.f; b[k] = k === 'items' ? deLinhas(i.value) : k === 'valor' ? +i.value || 0 : i.value.trim(); });
+      novo.bonus[box.dataset.bonus] = b;
+    });
     novo.minMonths = Math.max(1, +$('#min-meses', el).value || 3);
     return novo;
   }
@@ -79,6 +97,12 @@ export async function render(el) {
       if (!(await confirmar('Remover programa?', 'Ele deixa de aparecer nas novas propostas.', { rotulo: 'Remover', perigo: true }))) return;
       cat = ler(); delete cat.formats[b.dataset.remover]; desenhar(); return;
     }
+    if (b.dataset.removerBonus) {
+      if (!(await confirmar('Remover bônus?', 'Ele deixa de aparecer nas novas propostas.', { rotulo: 'Remover', perigo: true }))) return;
+      cat = ler(); delete cat.bonus[b.dataset.removerBonus]; desenhar(); return;
+    }
+    if (b.dataset.acao === 'novo-bonus') { cat = ler(); cat.bonus['b_' + Date.now().toString(36)] = { name: 'Novo bônus', chamada: '', valor: 0, desc: '', items: [] }; desenhar();
+      el.querySelector('[data-bonus]:last-of-type')?.setAttribute('open', ''); return; }
     if (b.dataset.acao === 'novo') { cat = ler(); cat.formats['p_' + Date.now().toString(36)] = { name: 'Novo programa', cobranca: 'unico', unit: 'único', price: 0, desc: '', items: [] }; desenhar(); return; }
     if (b.dataset.acao === 'padrao') {
       if (!(await confirmar('Restaurar o catálogo padrão?', 'Os valores voltam aos do modelo original. Só é gravado ao clicar em “Salvar catálogo”.', { rotulo: 'Restaurar' }))) return;
@@ -88,6 +112,7 @@ export async function render(el) {
       try {
         const novo = ler();
         if (Object.values(novo.formats).some((f) => !f.name)) return avisar('Todo programa precisa de nome.', 'bad');
+        if (Object.values(novo.bonus).some((x) => !x.name)) return avisar('Todo bônus precisa de nome.', 'bad');
         await q(db.from('app_settings').upsert({ key: 'catalogo', value: novo }, { onConflict: 'key' }));
         aplicarCatalogo(novo); cat = novo;
         registrar('configuracao.catalogo_salvo', { detalhes: { programas: Object.keys(novo.formats).length } });

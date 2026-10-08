@@ -375,3 +375,9 @@ table.t .num{text-align:right;font-variant-numeric:tabular-nums}
 .planilha td input{width:100%;min-width:110px;padding:6px 8px;border-radius:8px}
 .planilha .fixo{color:var(--muted)}
 .planilha tr.extra td{background:#fbfaff}
+
+.bonus-lista{display:flex;flex-direction:column;gap:6px}
+.bonus-linha{display:grid;grid-template-columns:1fr 180px 190px;gap:12px;align-items:center;padding:8px 12px;border:1px solid var(--line);border-radius:10px}
+.bonus-linha.on{border-color:var(--purple);background:#f8f5ff}
+.bonus-linha .field{margin:0}
+@media(max-width:720px){.bonus-linha{grid-template-columns:1fr}}
