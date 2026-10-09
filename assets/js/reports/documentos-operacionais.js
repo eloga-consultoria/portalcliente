@@ -251,23 +251,26 @@ export function relatorioHtml({ state, cliente, autodiag, logo, editavel = true 
 }
 
 // ===================================================================== PROPOSTA
-function cartaoOpcao(o, i, bonus = []) {
+// Quadro de cada opção. Valores, unidade e textos podem ser editados direto no documento (E).
+function cartaoOpcao(o, i, bonus = [], E = (k, d) => d) {
   const f = CATALOG.formats[o.type]; if (!f) return '';
   const pr = precoOpcao(o), frs = (f.frentesFixas ? [] : o.fronts).map((k) => CATALOG.fronts[k].name);
-  let preco, sub;
-  if (f.cobranca === 'unico') { preco = html`${brl(pr.once)} <small>pagamento único</small>`; sub = html`${frs.length ? 'Frente: ' + frs.join(', ') : ''}${f.nota ? (frs.length ? ' · ' : '') + f.nota : ''}`; }
-  else if (f.cobranca === 'por_frente') { preco = html`${brl(pr.once)} <small>valor único</small>`; sub = html`${frs.length ? 'Frente: ' + frs.join(', ') : ''}${f.nota ? (frs.length ? ' · ' : '') + f.nota : ''}`; }
-  else {
-    preco = html`${brl(pr.monthly)} <small>/mês</small>`;
-    sub = html`${frs.length ? html`Frentes: ${frs.join(', ')}<br>` : ''}Duração: ${pr.months} meses · total ${brl(pr.monthly * pr.months)}${pr.once ? ' + ' + CATALOG.system.name.toLowerCase() + ' ' + brl(pr.once) : ''}`;
+  let valor, unid, sub;
+  if (f.cobranca === 'unico' || f.cobranca === 'por_frente') {
+    valor = brl(pr.once); unid = f.cobranca === 'unico' ? 'pagamento único' : 'valor único';
+    sub = `${frs.length ? 'Frente: ' + frs.join(', ') : ''}${f.nota ? (frs.length ? ' · ' : '') + f.nota : ''}`;
+  } else {
+    valor = brl(pr.monthly); unid = '/mês';
+    sub = `${frs.length ? `Frentes: ${frs.join(', ')}\n` : ''}Duração: ${pr.months} meses · total ${brl(pr.monthly * pr.months)}${pr.once ? ' + ' + CATALOG.system.name.toLowerCase() + ' ' + brl(pr.once) : ''}`;
   }
+  const preco = html`${E(`p_op${i}_valor`, valor)} <small>${E(`p_op${i}_unid`, unid)}</small>`;
   const itens = [...(f.items || [])];
   if (o.system && recorrente(f)) itens.push(CATALOG.system.name + ': ' + CATALOG.system.items.join(', ').toLowerCase());
   return html`<div class="opt ${o.recommended ? 'rec' : ''} avoid">${o.recommended ? html`<span class="rib">RECOMENDADA</span>` : ''}
     <div class="sub">Opção ${i + 1}</div><h4>${f.name}</h4><p class="sub">${f.desc}</p>
-    <div class="price">${preco}</div><p class="sub">${sub}</p>
+    <div class="price">${preco}</div><p class="sub" style="white-space:pre-line">${E(`p_op${i}_sub`, sub)}</p>
     <ul class="ck" style="font-size:12.5px">${itens.map((x) => html`<li>${x}</li>`)}</ul>
-    ${bonus.length ? html`<div class="opt-bonus"><b>+ ${bonus.length} bônus inclus${bonus.length > 1 ? 'os' : 'o'}</b> · ${brl(bonus.reduce((t, b) => t + b.valor, 0))} em valor<br><span>${bonus.map((b) => b.name).join(' · ')}</span></div>` : ''}</div>`;
+    ${bonus.length ? html`<div class="opt-bonus"><b>${E(`p_op${i}_bonus`, `+ ${bonus.length} bônus inclus${bonus.length > 1 ? 'os' : 'o'} · ${brl(bonus.reduce((t, b) => t + b.valor, 0))} em valor`)}</b><br><span>${E(`p_op${i}_bonus_nomes`, bonus.map((b) => b.name).join(' · '))}</span></div>` : ''}</div>`;
 }
 
 /** Seções da proposta. A administradora escolhe quais entram no PDF. */
@@ -382,23 +385,23 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
     ${on('bonus') && bonus.length ? html`<h2><span class="num">${sec()}</span>Bônus exclusivos</h2>
     <p>${E('pb_intro', P.bonusEm === 'todas' ? 'Ferramentas prontas que aceleram a implantação e ficam com a clínica, incluídas em qualquer opção:' : 'Ferramentas prontas que aceleram a implantação e ficam com a clínica, incluídas na opção recomendada:')}</p>
     <div class="bonus-grid">${bonus.map((b) => html`<div class="bonus avoid ${b.rapido ? 'rapido' : ''}">
-      <div class="b-topo"><span class="b-selo">${b.rapido ? 'Decisão rápida' : 'Bônus'}</span><span class="b-valor">${b.valor ? html`<s>${brl(b.valor)}</s> ` : ''}<b>incluso</b></span></div>
+      <div class="b-topo"><span class="b-selo">${b.rapido ? 'Decisão rápida' : 'Bônus'}</span><span class="b-valor">${b.valor ? html`<s>${E(`p_b_${b.id}_v`, brl(b.valor))}</s> ` : ''}<b>${E(`p_b_${b.id}_inc`, 'incluso')}</b></span></div>
       <h4>${b.name}</h4>${b.chamada ? html`<p class="b-chamada">${b.chamada}</p>` : ''}
       ${b.desc ? html`<p class="b-desc">${b.desc}</p>` : ''}
       ${b.items.length ? html`<ul class="ck">${b.items.map((x) => html`<li>${x}</li>`)}</ul>` : ''}</div>`)}</div>
     ${bonusRapidos.length ? html`<p class="hint">Bônus de decisão rápida válidos para aceite até <b>${fmt(prazoRapido)}</b>.</p>` : ''}` : ''}
 
     ${on('investimento') ? html`<h2><span class="num">${sec()}</span>Investimento</h2>
-    ${opts.length ? html`<div class="opts">${P.options.map((o, i) => cartaoOpcao(o, i, o.type ? bonusDaOpcao(o) : []))}</div>` : html`<p class="empty">Monte as opções no painel acima.</p>`}` : ''}
+    ${opts.length ? html`<div class="opts">${P.options.map((o, i) => cartaoOpcao(o, i, o.type ? bonusDaOpcao(o) : [], E))}</div>` : html`<p class="empty">Monte as opções no painel acima.</p>`}` : ''}
 
     ${on('oferta') && O.on && rec ? html`<div class="oferta avoid">
       <div class="of-topo"><small>Oferta especial</small><h3>${E('of_titulo', O.titulo || 'Condição especial')}</h3>${O.intro ? html`<p>${E('of_intro', O.intro)}</p>` : ''}</div>
       <table class="of-pilha"><tbody>
-        <tr><td>${CATALOG.formats[rec.type]?.name || 'Programa'}${rec.fronts.length && !CATALOG.formats[rec.type]?.frentesFixas ? ` · ${nomesFrentes(rec.fronts).join(', ')}` : ''}</td><td>${brl(invest)}</td></tr>
-        ${bonusFixos.map((b) => html`<tr><td>Bônus · ${b.name}</td><td>${brl(b.valor)}</td></tr>`)}
-        ${bonusRapidos.map((b) => html`<tr class="rapido"><td>Bônus de decisão rápida · ${b.name} <span>(aceite até ${fmt(prazoRapido)})</span></td><td>${brl(b.valor)}</td></tr>`)}
-        <tr class="tot"><td>Valor total entregue</td><td><s>${brl(totalEntregue)}</s></td></tr>
-        <tr class="inv"><td>Seu investimento</td><td>${brl(invest)}${invest && totalEntregue > invest ? html`<span>${(totalEntregue / invest).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}× o valor investido</span>` : ''}</td></tr>
+        <tr><td>${E('p_of_prog_l', `${CATALOG.formats[rec.type]?.name || 'Programa'}${rec.fronts.length && !CATALOG.formats[rec.type]?.frentesFixas ? ` · ${nomesFrentes(rec.fronts).join(', ')}` : ''}`)}</td><td>${E('p_of_prog_v', brl(invest))}</td></tr>
+        ${bonusFixos.map((b) => html`<tr><td>${E(`p_of_${b.id}_l`, `Bônus · ${b.name}`)}</td><td>${E(`p_of_${b.id}_v`, brl(b.valor))}</td></tr>`)}
+        ${bonusRapidos.map((b) => html`<tr class="rapido"><td>${E(`p_of_${b.id}_l`, `Bônus de decisão rápida · ${b.name} (aceite até ${fmt(prazoRapido)})`)}</td><td>${E(`p_of_${b.id}_v`, brl(b.valor))}</td></tr>`)}
+        <tr class="tot"><td>${E('p_of_tot_l', 'Valor total entregue')}</td><td><s>${E('p_of_tot_v', brl(totalEntregue))}</s></td></tr>
+        <tr class="inv"><td>${E('p_of_inv_l', 'Seu investimento')}</td><td>${E('p_of_inv_v', brl(invest))}${invest && totalEntregue > invest ? html`<span>${E('p_of_mult', `${(totalEntregue / invest).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}× o valor investido`)}</span>` : ''}</td></tr>
       </tbody></table>
       <div class="of-garantias">${[['garantia', '✓'], ['pagamento', 'R$'], ['vagas', '!']].filter(([k]) => O[k]?.on && String(O[k].texto || '').trim()).map(([k, ic]) => html`<div><i>${ic}</i><p>${E('of_' + k, O[k].texto)}</p></div>`)}</div>
     </div>` : ''}

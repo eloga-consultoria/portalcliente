@@ -98,6 +98,13 @@ await passo('11b-proposta-prazo', async () => {
   const p = banco.proposals.find((x) => x.code === 'ELG-2026-001');
   if (!p || p.snapshot?.proposal?.validity !== 30 || !p.valid_until) throw new Error('validade não gravada na proposta emitida');
 });
+await passo('11c-proposta-valor-editado', async () => {
+  const el = page.locator('[data-ed="p_op0_valor"]').first();
+  await el.click(); await page.keyboard.press('Control+A'); await page.keyboard.type('R$ 1.500');
+  await page.waitForFunction(() => /Salvo/.test(document.querySelector('.saveflag')?.textContent || ''), null, { timeout: 8000 });
+  const d = banco.operational_diagnoses.at(-1)?.data;
+  if (d?.report?.edits?.p_op0_valor !== 'R$ 1.500') throw new Error('valor editado não salvo: ' + d?.report?.edits?.p_op0_valor);
+});
 await abaCliente('visao', '12-visao-geral', async () => {
   await page.fill('#ac-email', 'cliente@clinica-teste.com.br'); await page.click('#f-acesso [type=submit]');
   await page.waitForSelector('.secret'); await page.screenshot({ path: `${SAIDA}/12b-senha.png` }); await confirmarModal('Concluído');

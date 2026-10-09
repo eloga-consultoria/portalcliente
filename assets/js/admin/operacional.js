@@ -374,7 +374,9 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
         <p>Desmarque o que não deve entrar no PDF. Os textos com contorno podem ser editados direto no documento.</p></div></div>
         <div class="chips">${SECOES_PROPOSTA.map(([id, nome]) => html`<label class="chip"><input type="checkbox" data-secao-prop="${id}" ${secaoPropostaAtiva(state, id) ? html`checked` : ''}>${nome}</label>`)}</div></div>
       <div class="area-doc">
+        <p class="xs muted no-print" style="margin:0 0 6px">Clique em qualquer texto ou valor do documento para editar (preços, totais, bônus e oferta). Para voltar aos valores calculados, use “Restaurar textos”.</p>
         <div class="toolbar no-print" style="margin-bottom:12px"><span class="small muted" style="margin-right:auto">${emitidaAtual ? html`Proposta <b>${P.code}</b> emitida em ${fmtData(emitidaAtual.issued_at)}. Alterações exigem nova versão.` : 'Rascunho: confira antes de emitir.'}</span>
+          <button class="btn ghost" type="button" data-acao="restaurar-proposta">Restaurar textos</button>
           <button class="btn secondary" type="button" data-acao="atualizar-doc">Atualizar com os dados</button>
           ${emitidaAtual ? html`<button class="btn secondary" type="button" data-acao="nova-versao">Nova versão</button><button class="btn purple" type="button" data-acao="pdf-proposta">Gerar PDF novamente</button>`
             : html`<button class="btn purple" type="button" data-acao="emitir-proposta">Emitir proposta e gerar PDF</button>`}</div>
@@ -481,6 +483,11 @@ export async function criarOperacional({ cliente, autodiag, logo }) {
           if (atuais.length && !(await confirmar('Substituir as recomendações atuais?', 'As recomendações preenchidas serão trocadas pelas geradas. Você pode editar o texto depois.', { rotulo: 'Substituir' }))) break;
           state.matrix.quickwins = novas.map((t) => ({ t, on: true })); mudou(); redesenhar(); avisar('Recomendações geradas. Revise e ajuste o texto se precisar.', 'ok'); break;
         }
+        case 'restaurar-proposta':
+          if (await confirmar('Restaurar os textos da proposta?', 'Valores e textos editados no documento da proposta voltam a ser calculados a partir dos dados. Propostas já emitidas não mudam.', { rotulo: 'Restaurar' })) {
+            for (const k of Object.keys(state.report.edits)) if (/^(p_|pa_|pc_|pp_)/.test(k)) delete state.report.edits[k];
+            mudou(); redesenhar();
+          } break;
         case 'restaurar-textos':
           if (await confirmar('Restaurar os textos automáticos?', 'Os textos editados no relatório voltam a ser gerados a partir dos dados. Achados, recomendações e campos continuam como estão.', { rotulo: 'Restaurar' })) {
             for (const k of Object.keys(state.report.edits)) if (!/^(p_|pa_|pc_|pp_)/.test(k)) delete state.report.edits[k];
