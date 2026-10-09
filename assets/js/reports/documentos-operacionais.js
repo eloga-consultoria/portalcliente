@@ -270,7 +270,7 @@ function cartaoOpcao(o, i, bonus = [], E = (k, d) => d) {
     <div class="sub">Opção ${i + 1}</div><h4>${f.name}</h4><p class="sub">${f.desc}</p>
     <div class="price">${preco}</div><p class="sub" style="white-space:pre-line">${E(`p_op${i}_sub`, sub)}</p>
     <ul class="ck" style="font-size:12.5px">${itens.map((x) => html`<li>${x}</li>`)}</ul>
-    ${bonus.length ? html`<div class="opt-bonus"><b>${E(`p_op${i}_bonus`, `+ ${bonus.length} bônus inclus${bonus.length > 1 ? 'os' : 'o'} · ${brl(bonus.reduce((t, b) => t + b.valor, 0))} em valor`)}</b><br><span>${E(`p_op${i}_bonus_nomes`, bonus.map((b) => b.name).join(' · '))}</span></div>` : ''}</div>`;
+    ${bonus.length ? html`<div class="opt-bonus"><b>${E(`p_op${i}_bonus`, `+ ${bonus.length} bônus inclus${bonus.length > 1 ? 'os' : 'o'} · ${brl(bonus.reduce((t, b) => t + b.valor, 0))} em valor`)}</b><br><span class="nomes">${E(`p_op${i}_bonus_nomes`, bonus.map((b) => b.name).join(' · '))}</span></div>` : ''}</div>`;
 }
 
 /** Seções da proposta. A administradora escolhe quais entram no PDF. */
@@ -401,7 +401,7 @@ export function propostaHtml({ state, cliente, logo, editavel = true }) {
         ${bonusFixos.map((b) => html`<tr><td>${E(`p_of_${b.id}_l`, `Bônus · ${b.name}`)}</td><td>${E(`p_of_${b.id}_v`, brl(b.valor))}</td></tr>`)}
         ${bonusRapidos.map((b) => html`<tr class="rapido"><td>${E(`p_of_${b.id}_l`, `Bônus de decisão rápida · ${b.name} (aceite até ${fmt(prazoRapido)})`)}</td><td>${E(`p_of_${b.id}_v`, brl(b.valor))}</td></tr>`)}
         <tr class="tot"><td>${E('p_of_tot_l', 'Valor total entregue')}</td><td><s>${E('p_of_tot_v', brl(totalEntregue))}</s></td></tr>
-        <tr class="inv"><td>${E('p_of_inv_l', 'Seu investimento')}</td><td>${E('p_of_inv_v', brl(invest))}${invest && totalEntregue > invest ? html`<span>${E('p_of_mult', `${(totalEntregue / invest).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}× o valor investido`)}</span>` : ''}</td></tr>
+        <tr class="inv"><td>${E('p_of_inv_l', 'Seu investimento')}</td><td>${E('p_of_inv_v', brl(invest))}${invest && totalEntregue > invest ? html`<span class="mult">${E('p_of_mult', `${(totalEntregue / invest).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}× o valor investido`)}</span>` : ''}</td></tr>
       </tbody></table>
       <div class="of-garantias">${[['garantia', '✓'], ['pagamento', 'R$'], ['vagas', '!']].filter(([k]) => O[k]?.on && String(O[k].texto || '').trim()).map(([k, ic]) => html`<div><i>${ic}</i><p>${E('of_' + k, O[k].texto)}</p></div>`)}</div>
     </div>` : ''}

@@ -58,6 +58,8 @@
 .doc .opt .price small{font-size:13px;color:var(--d-muted);font-weight:600}
 .doc .opt .sub{font-size:12.5px;color:var(--d-muted)}
 .doc .editable{outline:1px dashed transparent;border-radius:4px}
+/* Trecho editável mantém exatamente a fonte, o tamanho e a cor de onde está */
+.doc span.editable{font:inherit!important;color:inherit!important;letter-spacing:inherit!important;text-transform:inherit!important;display:inline!important}
 .doc .editable:hover{outline-color:var(--d-lilac)}
 .doc .editable:focus{outline:2px solid var(--d-lilac);background:#fbf9ff}
 @media(max-width:720px){.doc .radar-wrap,.doc .opts{grid-template-columns:1fr}.doc .page{padding:28px 22px}.doc .cover{padding:32px 24px}.doc .kpis{grid-template-columns:1fr}}
@@ -144,7 +146,7 @@
 .doc .bonus .b-desc{font-size:12.5px;margin:0 0 6px;line-height:1.55}
 .doc .bonus ul.ck{font-size:12px}
 .doc .opt-bonus{margin-top:10px;padding:8px 10px;border-radius:8px;background:#f6f3ff;font-size:12px;color:var(--d-navy)}
-.doc .opt-bonus b{color:var(--d-purple)} .doc .opt-bonus span{color:var(--d-muted)}
+.doc .opt-bonus b{color:var(--d-purple)} .doc .opt-bonus .nomes{color:var(--d-muted)}
 .doc .oferta{border-radius:16px;overflow:hidden;border:2px solid var(--d-purple);margin:18px 0}
 .doc .of-topo{background:var(--d-navy);color:#fff;padding:18px 22px}
 .doc .of-topo small{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--d-lime)}
@@ -156,7 +158,7 @@
 .doc .of-pilha tr.rapido td{background:#fbffe9} .doc .of-pilha tr.rapido span{color:var(--d-muted);font-size:11.5px}
 .doc .of-pilha tr.tot td{font-weight:700;color:var(--d-muted);border-top:2px solid var(--d-navy)}
 .doc .of-pilha tr.inv td{background:#f6f3ff;font-size:17px;font-weight:800;color:var(--d-purple);border-bottom:0}
-.doc .of-pilha tr.inv span{display:block;font-size:11.5px;font-weight:700;color:var(--d-navy)}
+.doc .of-pilha tr.inv .mult{display:block;font-size:11.5px;font-weight:700;color:var(--d-navy)}
 .doc .of-garantias{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;padding:14px 22px;background:#fff}
 .doc .of-garantias>div{display:flex;gap:10px;align-items:flex-start}
 .doc .of-garantias i{flex:0 0 26px;height:26px;border-radius:50%;background:var(--d-lime);color:var(--d-navy);font-style:normal;font-weight:800;font-size:11px;display:grid;place-items:center}
