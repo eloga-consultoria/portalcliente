@@ -127,3 +127,22 @@ do $$ declare p uuid; begin
   end;
   delete from public.proposals where id = p;
 end $$;
+
+-- ===================== 010: cliente não exclui demandas nem troca o pilar
+\echo '=== 010: RESTRIÇÕES DO CLIENTE NO PLANO ==='
+reset role;
+update public.clients set liberacoes='{"plano":true,"plano_editar":true}', access_expires_at=null, is_active=true where name='Clinica A';
+update public.action_plans set data = jsonb_set(data, '{clients,10000000-0000-0000-0000-00000000000a,plano}',
+  '[{"id":"a1","pilar":"fat","what":"Ação 1"},{"id":"a2","pilar":"age","what":"Ação 2"}]')
+ where client_id='10000000-0000-0000-0000-00000000000a';
+set role authenticated;
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b","aal":"aal1"}';
+\echo '--- 010 excluir demanda: deve dar erro "Somente a ELOGA pode excluir"'
+select public.cliente_salvar_plano('[{"id":"a1","pilar":"fat","what":"Ação 1"}]');
+\echo '--- 010 trocar pilar: deve dar erro "Somente a ELOGA pode alterar o pilar"'
+select public.cliente_salvar_plano('[{"id":"a1","pilar":"fin","what":"Ação 1"},{"id":"a2","pilar":"age","what":"Ação 2"}]');
+\echo '--- 010 atualizar status mantendo tudo: grava (sem erro)'
+select public.cliente_salvar_plano('[{"id":"a1","pilar":"fat","what":"Ação 1","status":"Em andamento","progresso":30},{"id":"a2","pilar":"age","what":"Ação 2"}]');
+reset role;
+select data->'clients'->'10000000-0000-0000-0000-00000000000a'->'plano'->0->>'status' as status_010
+  from public.action_plans where client_id='10000000-0000-0000-0000-00000000000a';

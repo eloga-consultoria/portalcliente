@@ -10,6 +10,14 @@ body.no-portal .clientbar{display:none!important}
 .client-mode .navbtn:not([data-page="plano"]):not([data-page="dashboard"]){display:none!important}
 .client-mode .so-admin,.client-mode #somBtn{display:none!important}
 .so-plano .navbtn[data-page="dashboard"],.so-dashboard .navbtn[data-page="plano"]{display:none!important}
+/* Dentro do portal o painel é uma aba do site: sem barra própria, fundo do portal, altura do conteúdo */
+html.em-portal,html.em-portal body{height:auto!important;min-height:0!important}
+body.no-portal{background:transparent!important}
+body.no-portal .top{display:none!important}
+body.no-portal .nav{position:static!important;top:auto!important;background:transparent!important;padding:0 0 12px!important;border-bottom:1px solid var(--line)}
+body.no-portal main{max-width:none!important;padding:16px 0 8px!important}
+body.no-portal .navbtn[data-page="cliente"],body.no-portal #page-cliente{display:none!important}
+.cli-editor .so-admin-ed{display:none!important}
 </style>
 <script>
 /* Ponte com o Portal ELOGA. Este painel roda num quadro isolado (sandbox): não acessa
@@ -27,8 +35,11 @@ body.no-portal .clientbar{display:none!important}
     salvar: function(db){ pai.postMessage({ ponte:'eloga', tipo:'salvar', db: db }, '*'); }
   };
   var so = (/[#&]so=(plano|dashboard)/.exec(location.hash) || [])[1] || '';
+  document.documentElement.classList.add('em-portal');
+  document.documentElement.setAttribute('data-theme', 'light'); // o portal é claro: o painel acompanha
   document.addEventListener('DOMContentLoaded', function(){
     document.body.classList.add('no-portal');
+    if (papel === 'cliente-editor') document.body.classList.add('cli-editor');
     if (so) document.body.classList.add('so-' + so);
   });
   var ir = (/[#&]ir=(plano|dashboard)/.exec(location.hash) || [])[1] || so;
@@ -1093,7 +1104,7 @@ const STATUS_SERIES = [
   {label:'Atrasado', color:'#e5484d'},
   {label:'Não iniciado', color:'#8fa3ab'}
 ];
-let RO = false, VIEW = 'lista', FIL = {pilar:'', who:''}, MES_REF = null, SOM_ON = true, MODAL_ID = null, MODAL_MES = null, MODAL_FOCUS = '';
+let RO = false, CLI = false, VIEW = 'lista', FIL = {pilar:'', who:''}, MES_REF = null, SOM_ON = true, MODAL_ID = null, MODAL_MES = null, MODAL_FOCUS = '';
 const $ = id => document.getElementById(id);
 function pdcaEsc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 const E = pdcaEsc;
@@ -1146,7 +1157,7 @@ function contFases(dems){ const o={P:0,D:0,C:0,A:0}; dems.forEach(r=>o[faseOf(r)
 
 /* ---------- sincronização com o Diagnóstico por pilar ---------- */
 function syncPlanoFromDiagnostico(){
-  if(RO) return;
+  if(RO || CLI) return; // o cliente não vê o diagnóstico: só a ELOGA sincroniza as demandas automáticas
   const c = cur();
   if(!Array.isArray(c.pilaresPlano)) c.pilaresPlano = [];
   // 1) sai a demanda automática cujo critério virou "Atende" (ou cujo pilar saiu do plano) se ninguém mexeu nela
@@ -1178,7 +1189,7 @@ function diagValorAtual(r){
   return v===0 ? 'Não atende' : v===5 ? 'Parcial' : v===10 ? 'Atende' : 'Não avaliado';
 }
 function togglePilarPlano(pk){
-  if(RO) return;
+  if(RO || CLI) return;
   const c = cur();
   const i = c.pilaresPlano.indexOf(pk);
   if(i>=0){
@@ -1195,7 +1206,7 @@ function togglePilarPlano(pk){
   saveDB(); refreshPlano();
 }
 function restaurarRemovidas(){
-  if(RO) return;
+  if(RO || CLI) return;
   cur().dismissed.plano = [];
   syncPlanoFromDiagnostico(); refreshPlano();
   toast('Demandas removidas anteriormente foram restauradas.');
@@ -1222,7 +1233,7 @@ function renderFiltroSelects(){
 
 /* ---------- edição ---------- */
 function addPlanoRow(){
-  if(RO) return;
+  if(RO || CLI) return;
   const sel = $('planoPilarNovo');
   const pilar = (sel && sel.value) ? sel.value : PILARES[0].key;
   const r = newDem(pilar);
@@ -1232,7 +1243,7 @@ function addPlanoRow(){
   abrirDemanda(r.id);
 }
 function removerDemanda(id){
-  if(RO) return;
+  if(RO || CLI) return; // somente a ELOGA exclui demandas
   const c = cur(); const i = c.plano.findIndex(r=>r.id===id);
   if(i<0) return;
   if(!confirm('Excluir esta demanda do plano de ação?')) return;
@@ -1253,6 +1264,7 @@ function aplicarStatus(r, antes){
 }
 function setDem(id, f, v, rer){
   if(RO) return;
+  if(CLI && f==='pilar') return; // somente a ELOGA altera o pilar vinculado
   const r = demById(id); if(!r) return;
   const antes = r.status;
   r[f] = (f==='progresso') ? Math.max(0, Math.min(100, Number(v)||0)) : v;
@@ -1498,7 +1510,7 @@ function renderModal(){
     <div class="modal-h">
       <div><strong>Demanda · ${E(pilarLabel(r.pilar))}</strong> <span class="tag ${STATUS_CLASS_ACAO[ds]}" style="margin-left:6px">${ds}</span> ${origemTags(r)}</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <select onchange="setDem('${id}','pilar',this.value,false)">${PILARES.map(p=>`<option value="${p.key}" ${r.pilar===p.key?'selected':''}>${E(p.label)}</option>`).join('')}</select>
+        ${CLI ? '' : `<select onchange="setDem('${id}','pilar',this.value,false)">${PILARES.map(p=>`<option value="${p.key}" ${r.pilar===p.key?'selected':''}>${E(p.label)}</option>`).join('')}</select>`}
         <button class="btn btn-lime" onclick="fecharDemanda()">Fechar</button>
       </div>
     </div>
@@ -2327,6 +2339,7 @@ function desenharGraficosRel(p, ym){
   }
 }
 function gerarRelatorioAcompanhamento(){
+  if(document.body.classList.contains('client-mode')) return; // o cliente não emite relatório
   if(!MES_REF) MES_REF = ymAtual();
   $('relatorioImpressao').innerHTML = buildAcompanhamento(MES_REF, 'rep');
   desenharGraficosRel('rep', MES_REF);
@@ -2522,6 +2535,7 @@ function generateReport(){
   renderMesStackSVG('rep_mes', dadosMes(c.plano), false);
 }
 function gerarRelatorioPDF(){
+  if(document.body.classList.contains('client-mode')) return;
   generateReport();
   document.body.classList.add('report-mode');
   setTimeout(()=>{
@@ -2543,6 +2557,8 @@ function renderAll(){
   renderRelatorio();
 }
 function irParaPagina(nome){
+  if(document.body.classList.contains('client-mode') && nome!=='plano' && nome!=='dashboard') return;
+  if(document.body.classList.contains('no-portal') && nome==='cliente') nome = 'plano'; // dados do cliente vêm do cadastro do portal
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active', b.dataset.page===nome));
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id==='page-'+nome));
   if(nome === 'dashboard') renderDashboard();
@@ -2558,7 +2574,8 @@ document.getElementById('nav').addEventListener('click', (e) => {
 async function iniciar(){
   RO = /[?&]modo=cliente\b/.test(location.search) || location.hash === '#cliente' || !!(window.ELOGA_PORTAL && window.ELOGA_PORTAL.papel === 'cliente');
   RO = RO && !(window.ELOGA_PORTAL && window.ELOGA_PORTAL.papel === 'cliente-editor');
-  document.body.classList.toggle('client-mode', RO || !!(window.ELOGA_PORTAL && window.ELOGA_PORTAL.papel === 'cliente-editor'));
+  CLI = !!(window.ELOGA_PORTAL && window.ELOGA_PORTAL.papel === 'cliente-editor');
+  document.body.classList.toggle('client-mode', RO || CLI);
   try{ SOM_ON = localStorage.getItem('eloga_som') !== '0'; }catch(e){}
   let pre = null;
   if(window.ELOGA_PORTAL && typeof window.ELOGA_PORTAL.carregar === 'function'){
@@ -2572,9 +2589,16 @@ async function iniciar(){
   renderClientSelect();
   renderAll();
   if(RO) irParaPagina('dashboard');
+  else if(window.ELOGA_PORTAL) irParaPagina('plano');
 }
 iniciar();
-(function(){ var ult=0; setInterval(function(){ var h=document.documentElement.scrollHeight; if(Math.abs(h-ult)>4){ ult=h; window.parent.postMessage({ponte:"eloga",tipo:"altura",h:h},"*"); } }, 400); })();
+(function(){ var ult=0; setInterval(function(){
+  var m=document.querySelector('main'), n=document.getElementById('nav'); if(!m) return;
+  var h=Math.ceil(m.getBoundingClientRect().bottom + window.scrollY);
+  var md=document.getElementById('modalDem'), ap=document.getElementById('apres');
+  var foco=!!((md&&md.classList.contains('open'))||(ap&&ap.classList.contains('open')));
+  if(foco!==window.__foco){ window.__foco=foco; window.parent.postMessage({ponte:"eloga",tipo:"foco",aberto:foco},"*"); }
+  if(Math.abs(h-ult)>4){ ult=h; window.parent.postMessage({ponte:"eloga",tipo:"altura",h:h},"*"); } }, 300); })();
 </script>
 </body>
 </html>

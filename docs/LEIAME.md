@@ -57,6 +57,7 @@ Os PDFs do site são importados manualmente no menu **Importar**.
 | 8 | `supabase/migrations/007_cliente_edita_plano.sql` | Permite (quando liberado) que o cliente edite as ações do plano, com validação no servidor |
 | 9 | `supabase/migrations/008_planilhas_preenchiveis.sql` | Planilhas preenchíveis em Materiais (uma cópia por clínica) |
 | 10 | `supabase/migrations/009_proposta_data_validade.sql` | Permite ajustar data de emissão e validade de proposta já emitida (conteúdo continua travado) |
+| 11 | `supabase/migrations/010_plano_cliente_restricoes.sql` | Plano PDCA: o cliente não exclui demandas nem troca o pilar (só a ELOGA) |
 
 ✅ Esperado: "Success. No rows returned" em todos.
 Se aparecer erro, **pare** e envie o print da mensagem (sem dados de clientes).
@@ -151,7 +152,7 @@ Supabase > **Edge Functions > Secrets > Add new secret**:
    Confira que o arquivo apareceu.
 2. Rode no oficial o `000_inspecao_somente_leitura.sql` (não altera nada) e me envie o resultado:
    eu confiro se a estrutura bate com o que as migrations esperam.
-3. Com o "ok" da conferência e **a sua autorização escrita**, rode **001 → 009** no oficial
+3. Com o "ok" da conferência e **a sua autorização escrita**, rode **001 → 010** no oficial
    (**não** rode o arquivo da pasta `supabase/teste`).
 4. Ajuste as configurações de login (Etapa 2) e os segredos (Etapa 4.2) no oficial.
 5. Troque o segredo `SUPABASE_PROJECT_REF` no GitHub pelo código oficial e rode **Publicar funções** de novo.

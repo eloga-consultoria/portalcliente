@@ -33,9 +33,16 @@ export function montarPainel(caixa, { dados, modo = 'admin', so = '', ir = '', e
     if (e.source !== iframe.contentWindow || !e.data || e.data.ponte !== 'eloga') return;
     if (e.data.tipo === 'pronto') iframe.contentWindow.postMessage({ ponte: 'eloga', tipo: 'dados', db: dados }, '*');
     if (e.data.tipo === 'salvar' && (modo === 'admin' || editar) && e.data.db && typeof e.data.db === 'object') aoSalvar?.(e.data.db);
-    // Altura fixa (tamanho da tela): o painel rola por dentro, com menus e botões sempre visíveis.
-    // A mensagem de altura enviada pelo painel é ignorada de propósito.
+    // O quadro acompanha a altura do conteúdo: o painel aparece como uma aba do próprio site.
+    // Com uma demanda ou a apresentação abertas, o quadro ocupa a tela para a janela ficar visível.
+    if (e.data.tipo === 'altura' && Number.isFinite(e.data.h)) { altura = Math.max(400, Math.min(20000, Math.round(e.data.h))); if (!foco) iframe.style.height = altura + 'px'; }
+    if (e.data.tipo === 'foco') {
+      foco = !!e.data.aberto;
+      iframe.style.height = foco ? Math.max(480, innerHeight - 24) + 'px' : altura + 'px';
+      if (foco) iframe.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
   };
+  let altura = 700, foco = false;
   addEventListener('message', ouvir);
   caixa.replaceChildren(iframe);
   return () => removeEventListener('message', ouvir);
@@ -63,6 +70,12 @@ export async function render(p, ctx) {
       flag('Salvo às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), 'ok');
     } catch (e) { flag('Não salvo', 'bad'); avisarErro(e); }
   }, 900);
-  const desligar = montarPainel($('#caixa-painel', p), { dados: linha?.data?.clients ? linha.data : semente, modo: 'admin', aoSalvar: gravar });
+  // Dados do cliente vêm sempre do cadastro do portal (nome, CNPJ, cidade, responsável, logo):
+  // o painel não tem mais a aba "Cliente e projeto" e o relatório mensal usa estes dados.
+  const dados = linha?.data?.clients ? structuredClone(linha.data) : semente;
+  dados.clients[c.id] = { ...(dados.clients[c.id] || {}), nome: c.name, cidade: c.city || '', cnpj: c.tax_id || '',
+    socios: c.contact_name || '', logo: ctx.logo || dados.clients[c.id]?.logo || '' };
+  dados.current = c.id;
+  const desligar = montarPainel($('#caixa-painel', p), { dados, modo: 'admin', aoSalvar: gravar });
   return () => { gravar.flush(); desligar(); };
 }

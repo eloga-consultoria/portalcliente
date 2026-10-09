@@ -333,7 +333,7 @@ table.t .num{text-align:right;font-variant-numeric:tabular-nums}
 .cli-menu button:hover{background:var(--line-2)}
 .cli-menu button[aria-current=page]{background:var(--purple-soft);color:var(--purple);border-left-color:var(--purple)}
 @media(max-width:980px){.cli-layout{grid-template-columns:1fr}.cli-menu{position:static;flex-direction:row;overflow-x:auto;flex-wrap:nowrap}.cli-grupo{display:none}.cli-menu button{white-space:nowrap}}
-.painel-frame{width:100%;height:calc(100vh - 170px);height:calc(100dvh - 170px);min-height:520px;border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;display:block}
+.painel-frame{width:100%;height:700px;border:0;background:transparent;display:block;transition:height .15s}
 .cartao-portal{display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit;transition:transform var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
 .cartao-portal:hover{text-decoration:none;transform:translateY(-2px);box-shadow:var(--sh-2)}
 .cartao-portal .btn{align-self:flex-start;margin-top:auto}
