@@ -4,6 +4,7 @@
 import { db, q, registrar } from '../core/api.js';
 import { html, montar, $, debounce } from '../core/dom.js';
 import { avisarErro } from '../core/ui.js';
+import { VERSAO_PAINEL } from '../core/versao.js';
 
 /** Projeção que o cliente pode ver: só o plano PDCA e o necessário ao dashboard. */
 export function projecaoCliente(dbPainel) {
@@ -28,7 +29,7 @@ export function montarPainel(caixa, { dados, modo = 'admin', so = '', ir = '', e
   iframe.setAttribute('sandbox', modo === 'admin'
     ? 'allow-scripts allow-modals allow-downloads allow-popups allow-top-navigation-to-custom-protocols'
     : editar ? 'allow-scripts allow-modals' : 'allow-scripts');
-  iframe.src = 'assets/painel/painel-mestre.html' + (modo === 'cliente' ? '#cliente' + (so ? '&so=' + so : '') + (ir ? '&ir=' + ir : '') + (editar ? '&editar' : '') : '');
+  iframe.src = 'assets/painel/painel-mestre.html?v=' + VERSAO_PAINEL + (modo === 'cliente' ? '#cliente' + (so ? '&so=' + so : '') + (ir ? '&ir=' + ir : '') + (editar ? '&editar' : '') : '');
   const ouvir = (e) => {
     if (e.source !== iframe.contentWindow || !e.data || e.data.ponte !== 'eloga') return;
     if (e.data.tipo === 'pronto') iframe.contentWindow.postMessage({ ponte: 'eloga', tipo: 'dados', db: dados }, '*');

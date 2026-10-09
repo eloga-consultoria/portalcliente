@@ -13,6 +13,11 @@ const hash = (arq) => crypto.createHash('sha256').update(fs.readFileSync(path.jo
 const listar = (dir) => fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true })
   .flatMap((d) => (d.isDirectory() ? listar(path.join(dir, d.name)) : d.name.endsWith('.js') ? [path.join(dir, d.name).split(path.sep).join('/')] : []));
 
+// Páginas carregadas em quadro (iframe) também levam versão: o módulo versao.js guarda o hash delas.
+export function gerarVersaoJs() {
+  return `// Gerado por tools/versionar.mjs — não editar à mão.\nexport const VERSAO_PAINEL = '${hash('assets/painel/painel-mestre.html')}';\n`;
+}
+
 export function gerarIndex(html) {
   const modulos = listar('assets/js').sort();
   const mapa = { imports: Object.fromEntries(modulos.map((m) => ['./' + m, './' + m + '?v=' + hash(m)])) };
@@ -28,6 +33,12 @@ export function gerarIndex(html) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+  const arqVersao = path.join(RAIZ, 'assets/js/core/versao.js');
+  const versaoAtual = fs.existsSync(arqVersao) ? fs.readFileSync(arqVersao, 'utf8') : '';
+  if (versaoAtual !== gerarVersaoJs()) {
+    if (process.argv.includes('--check')) { console.error('versao.js desatualizado: rode "node tools/versionar.mjs".'); process.exit(1); }
+    fs.writeFileSync(arqVersao, gerarVersaoJs());
+  }
   const arq = path.join(RAIZ, 'index.html');
   const atual = fs.readFileSync(arq, 'utf8');
   const novo = gerarIndex(atual);
