@@ -1,0 +1,22 @@
+# Mantém o Supabase (plano gratuito) ativo: o projeto é pausado após alguns dias sem acesso.
+# A cada 2 dias faz uma consulta leve com a chave PUBLICÁVEL (a mesma do site; não é segredo).
+name: Manter portal ativo
+on:
+  schedule:
+    - cron: '23 11 */2 * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Consultar o Supabase
+        run: |
+          URL=$(grep -oE "https://[a-z0-9]+\.supabase\.co" assets/js/config.js | head -1)
+          KEY=$(grep -oE "sb_publishable_[A-Za-z0-9_-]+" assets/js/config.js | head -1)
+          for caminho in /auth/v1/health /rest/v1/; do
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' -H "apikey: $KEY" "$URL$caminho")
+            echo "$caminho -> $codigo"
+          done
