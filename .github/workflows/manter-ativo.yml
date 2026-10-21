@@ -1,9 +1,10 @@
-# Mantém o Supabase (plano gratuito) ativo: o projeto é pausado após alguns dias sem acesso.
-# A cada 2 dias faz uma consulta leve com a chave PUBLICÁVEL (a mesma do site; não é segredo).
+# Mantém o Supabase (plano gratuito) ativo: o projeto é pausado quando o BANCO fica dias sem acesso.
+# Todo dia chama a função public.ping() (só devolve a hora; não lê dados) com a chave PUBLICÁVEL
+# (a mesma do site; não é segredo). Se o projeto já estiver pausado, a ação fica vermelha para avisar.
 name: Manter portal ativo
 on:
   schedule:
-    - cron: '23 11 */2 * *'
+    - cron: '23 11 * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,11 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Consultar o Supabase
+      - name: Consultar o banco
         run: |
           URL=$(grep -oE "https://[a-z0-9]+\.supabase\.co" assets/js/config.js | head -1)
           KEY=$(grep -oE "sb_publishable_[A-Za-z0-9_-]+" assets/js/config.js | head -1)
-          for caminho in /auth/v1/health /rest/v1/; do
-            codigo=$(curl -s -o /dev/null -w '%{http_code}' -H "apikey: $KEY" "$URL$caminho")
-            echo "$caminho -> $codigo"
-          done
+          codigo=$(curl -s -o resposta.txt -w '%{http_code}' -X POST -H "apikey: $KEY" -H "Content-Type: application/json" -d '{}' "$URL/rest/v1/rpc/ping" || echo "000")
+          echo "ping -> $codigo $(cat resposta.txt 2>/dev/null)"
+          if [ "$codigo" != "200" ]; then echo "::error::Banco não respondeu (código $codigo). Verifique se o projeto foi pausado no Supabase."; exit 1; fi

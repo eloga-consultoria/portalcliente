@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Junta a réplica (só teste) e as migrations 001-010 em um arquivo para colar de uma vez no SQL Editor.
+# Junta a réplica (só teste) e as migrations 001-011 em um arquivo para colar de uma vez no SQL Editor.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 {

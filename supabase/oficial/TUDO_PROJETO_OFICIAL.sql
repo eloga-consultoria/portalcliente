@@ -1,5 +1,5 @@
 -- ARQUIVO ÚNICO · PROJETO OFICIAL (ELOGA Portal Estratégico · skatnnwkxcbzmoohexsx)
--- Migrations 001 a 010, nesta ordem. Testadas na réplica da estrutura oficial.
+-- Migrations 001 a 011, nesta ordem. Testadas na réplica da estrutura oficial.
 -- Rodar SOMENTE após backup e com autorização por escrito. NÃO inclui a réplica de teste.
 
 -- ================= supabase/migrations/000_inspecao_somente_leitura.sql =================
@@ -1264,5 +1264,22 @@ grant execute on function public.cliente_salvar_plano(jsonb) to authenticated;
 
 revoke all on function public.cliente_salvar_plano(jsonb) from public, anon;
 grant execute on function public.cliente_salvar_plano(jsonb) to authenticated;
+
+commit;
+
+-- ================= supabase/migrations/011_ping_manter_ativo.sql =================
+-- =====================================================================
+-- 011 · "PING" PARA MANTER O PROJETO ATIVO (plano gratuito do Supabase)
+-- O Supabase pausa o projeto sem atividade no banco. A ação do GitHub
+-- "Manter portal ativo" chama esta função todo dia. Ela só devolve a hora:
+-- não lê nem grava nenhum dado.
+-- Sem remoções. Idempotente.
+-- =====================================================================
+begin;
+
+create or replace function public.ping() returns timestamptz
+language sql stable security invoker set search_path = '' as $$ select now() $$;
+revoke all on function public.ping() from public;
+grant execute on function public.ping() to anon, authenticated;
 
 commit;
